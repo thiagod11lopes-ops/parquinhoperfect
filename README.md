@@ -194,7 +194,7 @@ daycare-app/
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/YOUR_USERNAME/Child-s-Day-Care-Management-System.git
+git clone https://github.com/thiagod11lopes-ops/Child-s-Day-Care-Management-System.git
 cd Child-s-Day-Care-Management-System
 ```
 
