@@ -2,6 +2,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
 import logoParquinho from '../assets/logo-parquinho.webp'
+import { syncedStorage } from '../firebase/syncedStorage'
 
 const AppearanceContext = createContext(null)
 const STORAGE_KEY = 'parquinhoAppearance'
@@ -297,7 +298,7 @@ function sanitizeLogoPreset(id) {
 
 function loadAppearance() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = syncedStorage.getItem(STORAGE_KEY)
     if (!raw) return defaultAppearance()
     const parsed = JSON.parse(raw)
     const next = { ...defaultAppearance(), ...parsed }
@@ -310,7 +311,7 @@ function loadAppearance() {
 }
 
 function persistAppearance(next) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  syncedStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   window.dispatchEvent(new CustomEvent('parquinho-appearance'))
 }
 

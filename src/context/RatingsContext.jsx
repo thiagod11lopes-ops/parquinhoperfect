@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
 
 const RatingsContext = createContext(null)
@@ -18,7 +19,7 @@ function formatClock(date = new Date()) {
 
 function loadRatings() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = syncedStorage.getItem(STORAGE_KEY)
     const parsed = raw ? JSON.parse(raw) : []
     return Array.isArray(parsed) ? parsed : []
   } catch {
@@ -27,13 +28,13 @@ function loadRatings() {
 }
 
 function persistRatings(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+  syncedStorage.setItem(STORAGE_KEY, JSON.stringify(list))
   window.dispatchEvent(new CustomEvent('parquinho-ratings'))
 }
 
 function loadHandover() {
   try {
-    const raw = localStorage.getItem(HANDOVER_KEY)
+    const raw = syncedStorage.getItem(HANDOVER_KEY)
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
@@ -41,8 +42,8 @@ function loadHandover() {
 }
 
 function persistHandover(handover) {
-  if (!handover) localStorage.removeItem(HANDOVER_KEY)
-  else localStorage.setItem(HANDOVER_KEY, JSON.stringify(handover))
+  if (!handover) syncedStorage.removeItem(HANDOVER_KEY)
+  else syncedStorage.setItem(HANDOVER_KEY, JSON.stringify(handover))
   window.dispatchEvent(new CustomEvent('parquinho-handover'))
 }
 

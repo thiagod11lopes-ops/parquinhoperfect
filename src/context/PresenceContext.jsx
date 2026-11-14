@@ -1,6 +1,7 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
 import { useParkSettings } from './ParkSettingsContext'
 
@@ -29,7 +30,7 @@ function emptyBucket() {
 
 function loadBucket(tenantId, unitId) {
   try {
-    const raw = localStorage.getItem(storageKey(tenantId, unitId))
+    const raw = syncedStorage.getItem(storageKey(tenantId, unitId))
     if (!raw) return emptyBucket()
     const parsed = JSON.parse(raw)
     const date = parsed.date || todayKey()
@@ -77,7 +78,7 @@ export function parseExitPayload(payloadText = '') {
 }
 
 function persistBucket(tenantId, unitId, bucket) {
-  localStorage.setItem(storageKey(tenantId, unitId), JSON.stringify(bucket))
+  syncedStorage.setItem(storageKey(tenantId, unitId), JSON.stringify(bucket))
   window.dispatchEvent(new CustomEvent(EVENT_NAME, {
     detail: { tenantId, unitId },
   }))

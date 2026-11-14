@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
 import { useSampleData } from './SampleDataContext'
 import { useCallBridge } from './CallBridgeContext'
@@ -11,7 +12,7 @@ const STORAGE_KEY = 'parquinhoGuardianSession'
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = syncedStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
@@ -128,7 +129,7 @@ export function GuardianSessionProvider({ children }) {
 
   useEffect(() => {
     if (!isResponsavel || !user || !hydrated) return
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    syncedStorage.setItem(STORAGE_KEY, JSON.stringify({
       userId: user.id,
       alerts,
       history,

@@ -1,6 +1,7 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
 import { useSampleData } from './SampleDataContext'
 import { useAppNotifications } from './AppNotificationsContext'
@@ -14,7 +15,7 @@ const READS_EVENT = 'parquinho-chat-reads'
 
 function loadChats() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = syncedStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
@@ -22,13 +23,13 @@ function loadChats() {
 }
 
 function persistChats(chats) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(chats))
+  syncedStorage.setItem(STORAGE_KEY, JSON.stringify(chats))
   window.dispatchEvent(new CustomEvent(EVENT_NAME))
 }
 
 function loadReads() {
   try {
-    const raw = localStorage.getItem(READS_KEY)
+    const raw = syncedStorage.getItem(READS_KEY)
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
@@ -36,7 +37,7 @@ function loadReads() {
 }
 
 function persistReads(reads) {
-  localStorage.setItem(READS_KEY, JSON.stringify(reads))
+  syncedStorage.setItem(READS_KEY, JSON.stringify(reads))
   window.dispatchEvent(new CustomEvent(READS_EVENT))
 }
 

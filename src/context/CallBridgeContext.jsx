@@ -1,6 +1,7 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
 import { useStaffNotify } from './StaffNotifyContext'
 
@@ -14,7 +15,7 @@ const ATTEMPT_MS = CALL_ATTEMPT_SECONDS * 1000
 
 function loadCall() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = syncedStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
@@ -22,8 +23,8 @@ function loadCall() {
 }
 
 function persistCall(call) {
-  if (!call) localStorage.removeItem(STORAGE_KEY)
-  else localStorage.setItem(STORAGE_KEY, JSON.stringify(call))
+  if (!call) syncedStorage.removeItem(STORAGE_KEY)
+  else syncedStorage.setItem(STORAGE_KEY, JSON.stringify(call))
   window.dispatchEvent(new CustomEvent(EVENT_NAME))
 }
 

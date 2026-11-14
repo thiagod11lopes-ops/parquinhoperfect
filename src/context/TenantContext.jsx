@@ -1,6 +1,7 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 
 const TenantContext = createContext(null)
 
@@ -17,7 +18,7 @@ export function isValidEmail(email) {
 
 function loadIndex() {
   try {
-    const raw = localStorage.getItem(INDEX_KEY)
+    const raw = syncedStorage.getItem(INDEX_KEY)
     const parsed = raw ? JSON.parse(raw) : {}
     return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
@@ -26,14 +27,14 @@ function loadIndex() {
 }
 
 function persistIndex(index) {
-  localStorage.setItem(INDEX_KEY, JSON.stringify(index))
+  syncedStorage.setItem(INDEX_KEY, JSON.stringify(index))
   window.dispatchEvent(new CustomEvent('parquinho-tenant'))
 }
 
 function loadTenant(tenantId) {
   if (!tenantId) return null
   try {
-    const raw = localStorage.getItem(tenantKey(tenantId))
+    const raw = syncedStorage.getItem(tenantKey(tenantId))
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return {
@@ -51,7 +52,7 @@ function loadTenant(tenantId) {
 }
 
 function persistTenant(tenant) {
-  localStorage.setItem(tenantKey(tenant.id), JSON.stringify(tenant))
+  syncedStorage.setItem(tenantKey(tenant.id), JSON.stringify(tenant))
   window.dispatchEvent(new CustomEvent('parquinho-tenant'))
 }
 

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 
 const StaffNotifyContext = createContext(null)
 
@@ -7,7 +8,7 @@ const EVENT_NAME = 'parquinho-staff-notify'
 
 function loadNotifications() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = syncedStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
@@ -15,7 +16,7 @@ function loadNotifications() {
 }
 
 function persist(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+  syncedStorage.setItem(STORAGE_KEY, JSON.stringify(list))
   window.dispatchEvent(new CustomEvent(EVENT_NAME))
 }
 

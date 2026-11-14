@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
 
 const ParkSettingsContext = createContext(null)
@@ -91,11 +92,11 @@ function scopeKey(base, tenantId, unitId) {
 function loadMaxChildren(tenantId, unitId) {
   try {
     const key = scopeKey(MAX_STORAGE_KEY_LEGACY, tenantId, unitId)
-    let raw = localStorage.getItem(key)
+    let raw = syncedStorage.getItem(key)
     if (raw == null && unitId) {
       // migração: copia legado global uma vez
-      raw = localStorage.getItem(MAX_STORAGE_KEY_LEGACY)
-      if (raw != null) localStorage.setItem(key, raw)
+      raw = syncedStorage.getItem(MAX_STORAGE_KEY_LEGACY)
+      if (raw != null) syncedStorage.setItem(key, raw)
     }
     if (raw == null) return DEFAULT_MAX_CHILDREN
     const n = Number(raw)
@@ -109,10 +110,10 @@ function loadMaxChildren(tenantId, unitId) {
 function loadParkInfo(tenantId, unitId) {
   try {
     const key = scopeKey(INFO_STORAGE_KEY_LEGACY, tenantId, unitId)
-    let raw = localStorage.getItem(key)
+    let raw = syncedStorage.getItem(key)
     if (!raw && unitId) {
-      raw = localStorage.getItem(INFO_STORAGE_KEY_LEGACY)
-      if (raw) localStorage.setItem(key, raw)
+      raw = syncedStorage.getItem(INFO_STORAGE_KEY_LEGACY)
+      if (raw) syncedStorage.setItem(key, raw)
     }
     if (!raw) {
       return {
@@ -137,7 +138,7 @@ function loadParkInfo(tenantId, unitId) {
 
 function persistParkInfo(tenantId, unitId, info) {
   const key = scopeKey(INFO_STORAGE_KEY_LEGACY, tenantId, unitId)
-  localStorage.setItem(key, JSON.stringify({
+  syncedStorage.setItem(key, JSON.stringify({
     hours: normalizeHours(info.hours),
     generalInfo: typeof info.generalInfo === 'string' ? info.generalInfo : '',
   }))
@@ -182,7 +183,7 @@ export function ParkSettingsProvider({ children }) {
   const setMaxChildren = useCallback((value) => {
     const n = Math.min(200, Math.max(1, Math.floor(Number(value) || DEFAULT_MAX_CHILDREN)))
     const key = scopeKey(MAX_STORAGE_KEY_LEGACY, tenantId, unitId)
-    localStorage.setItem(key, String(n))
+    syncedStorage.setItem(key, String(n))
     setMaxChildrenState(n)
     window.dispatchEvent(new CustomEvent('parquinho-park-settings'))
     return n

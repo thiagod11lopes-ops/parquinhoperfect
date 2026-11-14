@@ -1,6 +1,7 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
+import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
 
 const AppNotificationsContext = createContext(null)
@@ -11,7 +12,7 @@ const PERMISSION_KEY = 'parquinhoNotifyPermissionAsked'
 
 function loadAll() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = syncedStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
@@ -19,7 +20,7 @@ function loadAll() {
 }
 
 function persist(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+  syncedStorage.setItem(STORAGE_KEY, JSON.stringify(list))
   window.dispatchEvent(new CustomEvent(EVENT_NAME))
 }
 
@@ -144,7 +145,7 @@ export function AppNotificationsProvider({ children }) {
       return 'denied'
     }
     try {
-      localStorage.setItem(PERMISSION_KEY, '1')
+      syncedStorage.setItem(PERMISSION_KEY, '1')
       const result = await Notification.requestPermission()
       setPermission(result)
       if (result === 'granted') {

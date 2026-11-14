@@ -13,6 +13,7 @@ import { RatingsProvider } from './context/RatingsContext'
 import { TenantProvider } from './context/TenantContext'
 import { AppearanceProvider } from './context/AppearanceContext'
 import { AppNotificationsProvider } from './context/AppNotificationsContext'
+import { FirebaseSyncProvider } from './firebase/FirebaseSyncProvider'
 import NotificationBridge from './components/common/NotificationBridge'
 import PhoneFrame from './components/layout/PhoneFrame'
 import AppRouter from './router/AppRouter'
@@ -22,36 +23,38 @@ const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '')
 export default function App() {
   return (
     <BrowserRouter basename={routerBasename || undefined}>
-      <ThemeContextProvider>
-        <AppearanceProvider>
-          <TenantProvider>
-            <AuthProvider>
-              <AppNotificationsProvider>
-                <SampleDataProvider>
-                  <ParkSettingsProvider>
-                    <PresenceProvider>
-                      <StaffNotifyProvider>
-                        <CallBridgeProvider>
-                          <GuardianSessionProvider>
-                            <ChatProvider>
-                              <RatingsProvider>
-                                <PhoneFrame>
-                                  <NotificationBridge />
-                                  <AppRouter />
-                                </PhoneFrame>
-                              </RatingsProvider>
-                            </ChatProvider>
-                          </GuardianSessionProvider>
-                        </CallBridgeProvider>
-                      </StaffNotifyProvider>
-                    </PresenceProvider>
-                  </ParkSettingsProvider>
-                </SampleDataProvider>
-              </AppNotificationsProvider>
-            </AuthProvider>
-          </TenantProvider>
-        </AppearanceProvider>
-      </ThemeContextProvider>
+      <FirebaseSyncProvider>
+        <ThemeContextProvider>
+          <AppearanceProvider>
+            <TenantProvider>
+              <AuthProvider>
+                <AppNotificationsProvider>
+                  <SampleDataProvider>
+                    <ParkSettingsProvider>
+                      <PresenceProvider>
+                        <StaffNotifyProvider>
+                          <CallBridgeProvider>
+                            <GuardianSessionProvider>
+                              <ChatProvider>
+                                <RatingsProvider>
+                                  <PhoneFrame>
+                                    <NotificationBridge />
+                                    <AppRouter />
+                                  </PhoneFrame>
+                                </RatingsProvider>
+                              </ChatProvider>
+                            </GuardianSessionProvider>
+                          </CallBridgeProvider>
+                        </StaffNotifyProvider>
+                      </PresenceProvider>
+                    </ParkSettingsProvider>
+                  </SampleDataProvider>
+                </AppNotificationsProvider>
+              </AuthProvider>
+            </TenantProvider>
+          </AppearanceProvider>
+        </ThemeContextProvider>
+      </FirebaseSyncProvider>
     </BrowserRouter>
   )
 }

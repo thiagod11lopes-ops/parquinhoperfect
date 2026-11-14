@@ -1,3 +1,5 @@
+import { syncedStorage } from '../firebase/syncedStorage'
+
 function pad(n) {
   return String(n).padStart(2, '0')
 }
@@ -12,7 +14,7 @@ function storageKey(tenantId) {
 
 function loadRaw(tenantId) {
   try {
-    const raw = localStorage.getItem(storageKey(tenantId))
+    const raw = syncedStorage.getItem(storageKey(tenantId))
     if (!raw) return { days: {} }
     const parsed = JSON.parse(raw)
     return {
@@ -24,7 +26,7 @@ function loadRaw(tenantId) {
 }
 
 function persist(tenantId, data) {
-  localStorage.setItem(storageKey(tenantId), JSON.stringify(data))
+  syncedStorage.setItem(storageKey(tenantId), JSON.stringify(data))
 }
 
 function shiftDateKey(daysAgo) {
