@@ -17,9 +17,11 @@ import NotificationBridge from './components/common/NotificationBridge'
 import PhoneFrame from './components/layout/PhoneFrame'
 import AppRouter from './router/AppRouter'
 
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '')
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename || undefined}>
       <ThemeContextProvider>
         <AppearanceProvider>
           <TenantProvider>

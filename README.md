@@ -213,6 +213,11 @@ npm run dev
 http://localhost:5173
 ```
 
+### Live demo (GitHub Pages)
+```
+https://thiagod11lopes-ops.github.io/Child-s-Day-Care-Management-System/
+```
+
 ---
 
 ## 📖 Usage
