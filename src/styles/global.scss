@@ -1,0 +1,236 @@
+@import './variables';
+@import './components';
+@import './pages';
+@import './layout';
+@import './phone';
+
+// ============================================================
+// RESET & BASE
+// ============================================================
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  height: 100%;
+}
+
+body {
+  font-family: $font-family;
+  font-weight: 700;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root,
+#phone-app-root {
+  height: 100%;
+  font-weight: 700;
+  font-family: var(--app-font, 'Comic Sans MS', 'Comic Sans', cursive);
+}
+
+#phone-app-root,
+#root {
+  .MuiTypography-root,
+  .MuiButton-root,
+  .MuiChip-label,
+  .MuiInputBase-input,
+  .MuiFormLabel-root,
+  .MuiTableCell-root,
+  .MuiListItemText-primary,
+  .MuiMenuItem-root,
+  .MuiTab-root,
+  .MuiSvgIcon-root,
+  p, span, label, a, li, td, th, button, h1, h2, h3, h4, h5, h6 {
+    font-weight: 700 !important;
+    font-family: var(--app-font, 'Comic Sans MS', 'Comic Sans', cursive) !important;
+    color: var(--app-font-color, #fff) !important;
+    -webkit-text-fill-color: var(--app-font-color, #fff);
+    text-shadow: var(--app-font-shadow-stack, 0 1px 2px #000, 0 0 4px #000, 1px 1px 0 #000) !important;
+  }
+
+  .MuiSvgIcon-root {
+    text-shadow: none !important;
+    filter: drop-shadow(0 1px 1px var(--app-font-shadow, #000));
+  }
+
+  // Superfícies claras: texto escuro (não usam a cor de fonte do painel)
+  .MuiDialog-paper,
+  .MuiMenu-paper:not(.header-user-menu-paper),
+  .MuiPopover-paper:not(.header-user-menu-paper),
+  .MuiPickerPopper-root,
+  .MuiAutocomplete-paper,
+  .info-day-card,
+  .info-plus-chip,
+  .config-chip-btn.is-active,
+  .config-font-card.is-active {
+    .MuiTypography-root,
+    .MuiButton-root,
+    .MuiChip-label,
+    .MuiInputBase-input,
+    .MuiFormLabel-root,
+    .MuiTableCell-root,
+    .MuiListItemText-primary,
+    .MuiMenuItem-root,
+    .MuiTab-root,
+    .MuiSvgIcon-root,
+    p, span, label, a, li, td, th, button, h1, h2, h3, h4, h5, h6 {
+      color: #0f172a !important;
+      -webkit-text-fill-color: #0f172a;
+      text-shadow: none !important;
+      filter: none !important;
+    }
+
+    .MuiButton-contained {
+      color: #fff !important;
+      -webkit-text-fill-color: #fff;
+    }
+  }
+
+  // Menu do avatar: mesma tipografia branca do sistema
+  .header-user-menu-paper.MuiMenu-paper,
+  .header-user-menu-paper.MuiPopover-paper,
+  .header-user-menu-paper {
+    color: var(--app-font-color, #fff) !important;
+
+    .MuiTypography-root,
+    .MuiButton-root,
+    .MuiChip-label,
+    .MuiListItemText-primary,
+    .MuiMenuItem-root,
+    .MuiMenuItem-root *,
+    .MuiSvgIcon-root,
+    p, span, label, a, li, button, h1, h2, h3, h4, h5, h6 {
+      color: var(--app-font-color, #fff) !important;
+      -webkit-text-fill-color: var(--app-font-color, #fff) !important;
+      text-shadow: var(--app-font-shadow-stack, 0 1px 2px #000, 0 0 4px #000, 1px 1px 0 #000) !important;
+    }
+
+    .MuiSvgIcon-root {
+      filter: drop-shadow(0 1px 1px var(--app-font-shadow, #000)) !important;
+    }
+
+    .header-user-menu-item.is-danger,
+    .header-user-menu-item.is-danger .header-user-menu-item-label,
+    .header-user-menu-item.is-danger .header-user-menu-item-hint,
+    .header-user-menu-item.is-danger .MuiSvgIcon-root {
+      color: #fecaca !important;
+      -webkit-text-fill-color: #fecaca !important;
+    }
+  }
+
+  .config-chip-btn.is-active,
+  .config-font-card.is-active {
+    color: var(--app-accent-deep, #ea580c) !important;
+    -webkit-text-fill-color: var(--app-accent-deep, #ea580c) !important;
+    text-shadow: none !important;
+
+    .config-font-card-sample,
+    .config-font-card-name,
+    span {
+      color: var(--app-accent-deep, #ea580c) !important;
+      -webkit-text-fill-color: var(--app-accent-deep, #ea580c) !important;
+      text-shadow: none !important;
+    }
+  }
+
+  // Título da barra superior (fundo claro): sem sombra que corta as letras
+  .app-header-panel .header-title {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    text-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .app-header-panel .header-inner .MuiIconButton-root .MuiSvgIcon-root {
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    filter: none !important;
+    text-shadow: none !important;
+  }
+
+  // Folha de informações: tipografia manuscrita fixa (não segue fonte/cor do sistema)
+  .info-notepad-sheet,
+  .info-notepad-sheet .MuiTypography-root,
+  .info-notepad-sheet .MuiInputBase-input,
+  .info-notepad-sheet textarea,
+  .info-notepad-sheet input,
+  .info-notepad-sheet p,
+  .info-notepad-sheet span {
+    font-family: 'Segoe Print', 'Comic Sans MS', 'Bradley Hand', cursive !important;
+    color: #1f2937 !important;
+    text-shadow: none !important;
+    -webkit-text-fill-color: #1f2937 !important;
+    filter: none !important;
+  }
+
+  .info-notepad-sheet .info-notepad-title {
+    color: #1e3a5f !important;
+    -webkit-text-fill-color: #1e3a5f !important;
+  }
+
+  .info-notepad-sheet .info-notepad-body.is-empty {
+    color: #64748b !important;
+    -webkit-text-fill-color: #64748b !important;
+  }
+}
+
+// ============================================================
+// SCROLLBAR
+// ============================================================
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  {
+  background: rgba($primary, 0.25);
+  border-radius: $radius-full;
+  &:hover { background: rgba($primary, 0.5); }
+}
+
+// ============================================================
+// ANIMATIONS
+// ============================================================
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes splashPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+@keyframes splashRing {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  70% { transform: scale(1.18); opacity: 0; }
+  100% { transform: scale(1.18); opacity: 0; }
+}
+
+@keyframes splashShimmer {
+  0% { transform: translateX(-120%) rotate(18deg); }
+  100% { transform: translateX(120%) rotate(18deg); }
+}
+
+@keyframes splashDot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+  40% { transform: translateY(-6px); opacity: 1; }
+}
+
+@keyframes gateFadeIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -52%) scale(1.08); }
+}

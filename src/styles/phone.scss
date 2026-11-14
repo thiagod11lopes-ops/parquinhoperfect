@@ -1,0 +1,223 @@
+@import './variables';
+
+.phone-stage {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba($primary, 0.18), transparent 45%),
+    radial-gradient(ellipse at 80% 80%, rgba($secondary, 0.14), transparent 45%),
+    linear-gradient(160deg, #0f1220 0%, #1a1f35 50%, #12162a 100%);
+}
+
+.phone-device {
+  position: relative;
+  width: min(390px, calc(100vw - 32px));
+  height: min(844px, calc(100dvh - 48px));
+  border-radius: 40px;
+  background: #0b0d14;
+  border: 3px solid #2a2f45;
+  box-shadow:
+    0 0 0 2px #111522,
+    0 25px 60px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.phone-notch {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 28px;
+  background: #0b0d14;
+  border-radius: 18px;
+  z-index: 30;
+  pointer-events: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 56px;
+    height: 8px;
+    border-radius: 8px;
+    background: #1c2133;
+  }
+}
+
+.phone-status-bar {
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
+  height: 44px;
+  padding: 12px 22px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  pointer-events: none;
+}
+
+.phone-status-time {
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  color: #f8fafc !important;
+  letter-spacing: 0.02em;
+}
+
+.phone-status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phone-signal,
+.phone-wifi,
+.phone-battery {
+  display: inline-block;
+  background: #f8fafc;
+}
+
+.phone-signal {
+  width: 14px;
+  height: 10px;
+  clip-path: polygon(0 100%, 25% 70%, 25% 100%, 50% 45%, 50% 100%, 75% 20%, 75% 100%, 100% 0, 100% 100%);
+}
+
+.phone-wifi {
+  width: 12px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid #f8fafc;
+  border-bottom: none;
+  border-left-color: transparent;
+  border-right-color: transparent;
+  transform: translateY(2px);
+}
+
+.phone-battery {
+  width: 18px;
+  height: 9px;
+  border-radius: 2px;
+  position: relative;
+  opacity: 0.95;
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: -3px;
+    top: 2px;
+    width: 2px;
+    height: 5px;
+    border-radius: 0 1px 1px 0;
+    background: #f8fafc;
+  }
+}
+
+.phone-screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0;
+  isolation: isolate;
+  font-family: var(--app-font, 'Comic Sans MS', 'Comic Sans', cursive);
+  background-color: transparent;
+  background-image: none;
+
+  // Camada de fundo com opacidade (cor / imagem / gradiente)
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-color: var(--app-bg-color, #f97316);
+    background-image: var(--app-bg-image);
+    background-repeat: no-repeat;
+    background-position: var(--app-bg-pos, center center);
+    background-size: var(--app-bg-size, cover);
+    opacity: var(--app-bg-opacity, 1);
+  }
+
+  > *:not(.MuiModal-root):not(.MuiPopover-root):not(.MuiPopper-root) {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    min-height: 0;
+  }
+
+  // Popovers/menus do header: fixed (alinhados ao avatar/sino)
+  > .MuiPopover-root,
+  > .MuiPopper-root {
+    z-index: 45;
+  }
+
+  // Drawer lateral (três traços): preso ao phone-screen
+  > .MuiModal-root.sidebar-drawer,
+  > .sidebar-drawer.MuiModal-root,
+  > .MuiDrawer-root.sidebar-drawer {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 50 !important;
+  }
+}
+
+.phone-home-indicator {
+  flex-shrink: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  pointer-events: none;
+
+  &::after {
+    content: '';
+    width: 118px;
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.35);
+  }
+}
+
+// Em celular real: ocupa a tela toda, sem moldura
+@media (max-width: 480px) {
+  .phone-stage {
+    padding: 0;
+    background: #000;
+  }
+
+  .phone-device {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .phone-notch {
+    top: max(8px, env(safe-area-inset-top));
+  }
+
+  .phone-status-bar {
+    padding-top: max(10px, env(safe-area-inset-top));
+    height: calc(36px + env(safe-area-inset-top, 0px));
+  }
+
+  .phone-home-indicator {
+    height: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

@@ -1,0 +1,382 @@
+.onboard-root {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--app-font-color, #fff);
+  font-family: var(--app-font, 'Outfit', sans-serif);
+}
+
+.onboard-aurora {
+  position: absolute;
+  inset: -20% -10%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--app-accent, #f97316) 55%, transparent), transparent 42%),
+    radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--app-accent-deep, #ea580c) 45%, transparent), transparent 38%),
+    radial-gradient(circle at 50% 90%, rgba(15, 23, 42, 0.35), transparent 45%);
+  filter: blur(8px);
+  animation: onboardDrift 10s ease-in-out infinite alternate;
+  opacity: 0.9;
+}
+
+@keyframes onboardDrift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(2%, 2%, 0) scale(1.06); }
+}
+
+.onboard-shell {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 14px 12px;
+}
+
+.onboard-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+  margin-bottom: 12px;
+
+  span {
+    display: block;
+    height: 100%;
+    width: var(--onboard-progress, 10%);
+    border-radius: inherit;
+    background: linear-gradient(90deg, #fff, color-mix(in srgb, var(--app-accent, #fb923c) 70%, #fff));
+    transition: width 0.35s ease;
+  }
+}
+
+.onboard-stepper {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.onboard-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  transition: width 0.25s ease, background 0.25s ease;
+
+  &.is-active {
+    width: 22px;
+    background: #fff;
+  }
+
+  &.is-done {
+    background: color-mix(in srgb, var(--app-accent, #fb923c) 80%, #fff);
+  }
+}
+
+.onboard-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  animation: onboardIn 0.38s ease both;
+}
+
+@keyframes onboardIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.onboard-panel {
+  padding: 6px 2px 8px;
+}
+
+.onboard-kicker,
+.onboard-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  text-shadow: var(--app-font-shadow-stack, 0 1px 2px #000);
+}
+
+.onboard-badge.is-success {
+  background: rgba(34, 197, 94, 0.28);
+  border-color: rgba(134, 239, 172, 0.45);
+}
+
+.onboard-brand {
+  font-size: clamp(2rem, 9vw, 2.55rem) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.04em;
+  line-height: 1 !important;
+  margin: 0 0 8px !important;
+  text-shadow: var(--app-font-shadow-stack, 0 1px 2px #000);
+}
+
+.onboard-title {
+  font-size: 1.35rem !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  margin: 0 0 8px !important;
+  text-shadow: var(--app-font-shadow-stack, 0 1px 2px #000);
+}
+
+.onboard-sub {
+  font-size: 0.86rem !important;
+  font-weight: 600 !important;
+  opacity: 0.92;
+  margin: 0 0 14px !important;
+  text-shadow: 0 1px 2px var(--app-font-shadow, #000);
+}
+
+.onboard-welcome {
+  padding-top: 28px;
+}
+
+.onboard-theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.onboard-theme {
+  min-height: 64px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  transition: transform 0.18s ease, border-color 0.18s ease;
+
+  span {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 800;
+  }
+
+  &.is-active {
+    border-color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 10px 20px rgba(0, 0, 0, 0.22);
+  }
+}
+
+.onboard-font-preview {
+  margin-bottom: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.onboard-font-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.onboard-font-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--app-font-color, #fff);
+  cursor: pointer;
+
+  strong {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    opacity: 0.9;
+  }
+
+  &.is-active {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: #fff;
+    color: var(--app-accent-deep, #ea580c);
+  }
+}
+
+.onboard-color-fields {
+  .MuiFormLabel-root,
+  .MuiInputBase-input {
+    color: var(--app-font-color, #fff) !important;
+  }
+
+  .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(255, 255, 255, 0.35) !important;
+  }
+}
+
+.onboard-logo-stage {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 12px;
+  border-radius: 18px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 0;
+
+  &.is-upload {
+    cursor: pointer;
+    border-style: dashed;
+  }
+
+  img {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 12px;
+    transform-origin: center center;
+  }
+}
+
+.onboard-bg-preview {
+  width: min(140px, 42%);
+  aspect-ratio: 390 / 844;
+  margin: 0 auto 12px;
+  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background-repeat: no-repeat;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.onboard-chip {
+  border-radius: 999px !important;
+  text-transform: none !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: var(--app-font-color, #fff) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  font-weight: 800 !important;
+
+  &.is-active {
+    background: #fff !important;
+    color: var(--app-accent-deep, #ea580c) !important;
+  }
+}
+
+.onboard-fill-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+}
+
+.onboard-slider-block {
+  padding: 8px 4px 0;
+}
+
+.onboard-slider-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+
+  .MuiTypography-root,
+  span {
+    font-size: 0.74rem !important;
+    font-weight: 700 !important;
+  }
+}
+
+.onboard-field {
+  .MuiFormLabel-root,
+  .MuiInputBase-input {
+    color: var(--app-font-color, #fff) !important;
+  }
+
+  .MuiOutlinedInput-root {
+    background: rgba(15, 23, 42, 0.22);
+    border-radius: 12px;
+  }
+
+  .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(255, 255, 255, 0.35) !important;
+  }
+}
+
+.onboard-notice {
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  text-shadow: none !important;
+
+  .MuiAlert-message {
+    color: #0f172a !important;
+    text-shadow: none !important;
+    -webkit-text-fill-color: #0f172a !important;
+  }
+}
+
+.onboard-error {
+  margin: 8px 0 0 !important;
+  border-radius: 12px !important;
+}
+
+.onboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.onboard-actions-spacer {
+  flex: 1;
+}
+
+.onboard-btn-primary {
+  border-radius: 999px !important;
+  text-transform: none !important;
+  font-weight: 800 !important;
+  padding: 8px 16px !important;
+  background: #fff !important;
+  color: var(--app-accent-deep, #c2410c) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
+}
+
+.onboard-btn-ghost {
+  border-radius: 999px !important;
+  text-transform: none !important;
+  font-weight: 800 !important;
+  color: var(--app-font-color, #fff) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+}
