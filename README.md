@@ -194,8 +194,8 @@ daycare-app/
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/thiagod11lopes-ops/Child-s-Day-Care-Management-System.git
-cd Child-s-Day-Care-Management-System
+git clone https://github.com/thiagod11lopes-ops/parquinhoperfect.git
+cd parquinhoperfect
 ```
 
 2. **Install dependencies**
@@ -215,7 +215,7 @@ http://localhost:5173
 
 ### Live demo (GitHub Pages)
 ```
-https://thiagod11lopes-ops.github.io/Child-s-Day-Care-Management-System/
+https://thiagod11lopes-ops.github.io/parquinhoperfect/
 ```
 
 ---

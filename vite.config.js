@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // GitHub Pages serves the app under /<repo-name>/
-const repoBase = '/Child-s-Day-Care-Management-System/'
+const repoBase = '/parquinhoperfect/'
 
 export default defineConfig({
   plugins: [react()],
