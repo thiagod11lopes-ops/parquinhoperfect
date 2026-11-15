@@ -17,6 +17,7 @@ import {
   Tooltip,
 } from 'recharts'
 import StatCard from '../../components/common/StatCard'
+import AdminBillingBanner from '../../components/billing/AdminBillingBanner'
 import { useSampleData } from '../../context/SampleDataContext'
 import { useAuth } from '../../context/AuthContext'
 import { useParkSettings } from '../../context/ParkSettingsContext'
@@ -124,6 +125,8 @@ export default function Dashboard() {
 
   return (
     <Box className="page-container">
+      <AdminBillingBanner />
+
       {(isProfessor || isGerente) && (
         <Box className={`capacity-card panel-card ${atLimit ? 'is-full' : nearLimit ? 'is-near' : ''}`} sx={{ mb: 2 }}>
           <Box className="capacity-card-head">
