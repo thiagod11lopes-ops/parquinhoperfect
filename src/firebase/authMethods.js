@@ -17,6 +17,10 @@ googleProvider.setCustomParameters({ prompt: 'select_account' })
 
 function mapAuthError(err) {
   const code = err?.code || ''
+  const raw = String(err?.message || '')
+  if (/recaptcha has already been rendered/i.test(raw)) {
+    return 'Falha no reCAPTCHA. Toque em Enviar SMS novamente.'
+  }
   const messages = {
     'auth/popup-closed-by-user': 'Login cancelado.',
     'auth/popup-blocked': 'Pop-up bloqueado pelo navegador. Permita pop-ups e tente de novo.',
@@ -112,6 +116,17 @@ export async function firebaseSignUpWithPassword(email, password, name) {
 
 let recaptchaVerifier = null
 
+function getRecaptchaHost() {
+  let host = document.getElementById('firebase-recaptcha')
+  if (!host) {
+    host = document.createElement('div')
+    host.id = 'firebase-recaptcha'
+    host.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;'
+    document.body.appendChild(host)
+  }
+  return host
+}
+
 export function clearRecaptcha() {
   try {
     recaptchaVerifier?.clear?.()
@@ -119,13 +134,22 @@ export function clearRecaptcha() {
     // ignore
   }
   recaptchaVerifier = null
-  const el = document.getElementById('firebase-recaptcha')
-  if (el) el.innerHTML = ''
+  const host = document.getElementById('firebase-recaptcha')
+  if (host) host.innerHTML = ''
+  // Remove leftover grecaptcha widgets Firebase may leave on the page
+  document.querySelectorAll('.grecaptcha-badge').forEach((node) => {
+    try { node.remove() } catch { /* ignore */ }
+  })
 }
 
-export function ensureRecaptcha(containerId = 'firebase-recaptcha') {
-  if (recaptchaVerifier) return recaptchaVerifier
-  recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+function createFreshRecaptcha() {
+  clearRecaptcha()
+  const host = getRecaptchaHost()
+  const container = document.createElement('div')
+  container.id = `firebase-recaptcha-widget-${Date.now()}`
+  host.appendChild(container)
+
+  recaptchaVerifier = new RecaptchaVerifier(auth, container.id, {
     size: 'invisible',
     callback: () => {},
     'expired-callback': () => {
@@ -141,7 +165,8 @@ export async function firebaseStartPhoneSignIn(phoneInput) {
     if (!phone || phone.length < 12) {
       return { success: false, error: 'Informe um telefone válido com DDD.' }
     }
-    const verifier = ensureRecaptcha()
+    const verifier = createFreshRecaptcha()
+    await verifier.render()
     const confirmation = await signInWithPhoneNumber(auth, phone, verifier)
     return { success: true, confirmation, phone }
   } catch (err) {

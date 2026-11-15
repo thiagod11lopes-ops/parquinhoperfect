@@ -258,7 +258,11 @@ export default function Login() {
     <Box className={`access-gate ${phase === 'splash' ? 'is-splash' : 'is-ready'}`}>
       <Box className="access-gate-bg" aria-hidden />
       <Box className="access-gate-glow" aria-hidden />
-      <Box id="firebase-recaptcha" sx={{ position: 'absolute', left: -9999, width: 1, height: 1 }} />
+      <Box
+        id="firebase-recaptcha"
+        aria-hidden
+        sx={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}
+      />
 
       {phase === 'splash' ? (
         <Box className="access-splash">
