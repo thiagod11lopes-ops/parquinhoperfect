@@ -293,6 +293,25 @@ export function AuthProvider({ children }) {
         error: 'Login por SMS está disponível para Responsáveis.',
       }
     }
+
+    // Valida a pirâmide ANTES de enviar SMS
+    const access = resolvePhoneAccess(phone)
+    if (!access) {
+      return {
+        success: false,
+        error: 'Telefone não cadastrado. Peça ao professor ou gerente para incluir seu celular no convite.',
+      }
+    }
+    if (access.kind === 'revoked') {
+      return { success: false, error: 'Este convite foi revogado.' }
+    }
+    if (access.role !== 'responsavel') {
+      return {
+        success: false,
+        error: `Este telefone está cadastrado como ${access.role}. Escolha o acesso correto.`,
+      }
+    }
+
     return firebaseStartPhoneSignIn(phone)
   }
 
