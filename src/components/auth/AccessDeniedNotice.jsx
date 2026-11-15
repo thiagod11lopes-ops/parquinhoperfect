@@ -22,7 +22,6 @@ export function isUnauthorizedAccessMessage(message = '') {
 export default function AccessDeniedNotice({
   open,
   message,
-  role,
   onClose,
 }) {
   useEffect(() => {
