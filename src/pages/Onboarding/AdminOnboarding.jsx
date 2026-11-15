@@ -697,57 +697,83 @@ export default function AdminOnboarding({ onComplete }) {
           )}
 
           {stepId === 'plan' && (
-            <Box className="onboard-panel">
+            <Box className="onboard-panel onboard-plan-step">
               <Box className="onboard-kicker">
                 <WorkspacePremiumOutlinedIcon fontSize="small" />
                 Assinatura
               </Box>
               <Typography className="onboard-title">Escolha o seu plano</Typography>
-              <Typography className="onboard-sub">
-                Esta etapa é obrigatória. Selecione um plano para liberar o sistema.
-              </Typography>
               <Alert severity="info" className="onboard-notice">
                 Planos pagos começam com período de teste. Você pode assinar pelo Mercado Pago
                 depois em Planos.
               </Alert>
-              <Box className="onboard-plan-grid" role="list" aria-label="Planos disponíveis">
-                {BILLING_PLANS.map((plan) => {
+              <Box className="planos-cards onboard-planos-cards" role="list" aria-label="Planos disponíveis">
+                {BILLING_PLANS.map((plan, index) => {
                   const selected = selectedPlanId === plan.id
                   return (
-                    <button
+                    <Box
                       key={plan.id}
-                      type="button"
                       role="listitem"
                       className={[
-                        'onboard-plan-card',
+                        'planos-card',
                         plan.highlight ? 'is-featured' : '',
-                        selected ? 'is-selected' : '',
+                        selected ? 'is-current' : '',
                       ].filter(Boolean).join(' ')}
+                      style={{ animationDelay: `${0.04 + index * 0.05}s` }}
                       onClick={() => {
                         setError('')
                         setSelectedPlanId(plan.id)
                       }}
                     >
-                      <span className="onboard-plan-name">{plan.name}</span>
-                      {plan.highlight ? <span className="onboard-plan-badge">Popular</span> : null}
-                      <span className={`onboard-plan-price${plan.price <= 0 && plan.compareAtPrice ? ' is-free-strike' : ''}`}>
+                      <Box className="planos-card-top">
+                        <Typography className="planos-card-name">{plan.name}</Typography>
+                        {plan.highlight && <span className="planos-card-badge">Popular</span>}
+                        {selected && <span className="planos-card-badge is-soft">Selecionado</span>}
+                      </Box>
+
+                      <Typography
+                        className={`planos-card-price${plan.price <= 0 && plan.compareAtPrice ? ' is-free-strike' : ''}`}
+                      >
                         {plan.price <= 0 && plan.compareAtPrice ? (
-                          <span className="onboard-plan-price-strike">{formatPlanPrice(plan)}</span>
+                          <span className="planos-card-price-strike">{formatPlanPrice(plan)}</span>
                         ) : (
                           formatPlanPrice(plan)
                         )}
                         {(plan.price > 0 || plan.compareAtPrice > 0) && (
-                          <span className="onboard-plan-period">/mês</span>
+                          <span className="planos-card-price-period">/mês</span>
                         )}
-                      </span>
-                      <span className="onboard-plan-desc">{plan.description}</span>
-                      {selected ? (
-                        <span className="onboard-plan-check">
-                          <CheckRoundedIcon fontSize="inherit" />
-                          Selecionado
-                        </span>
-                      ) : null}
-                    </button>
+                      </Typography>
+
+                      <Typography className="planos-card-desc">{plan.description}</Typography>
+
+                      <Box className="planos-card-features">
+                        {plan.features.map((feature) => (
+                          <Box key={feature} className="planos-card-feature">
+                            <span className="planos-card-feature-icon" aria-hidden>
+                              <CheckRoundedIcon />
+                            </span>
+                            <Typography>{feature}</Typography>
+                          </Box>
+                        ))}
+                      </Box>
+
+                      <Button
+                        fullWidth
+                        disableElevation
+                        className="planos-card-cta"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setError('')
+                          setSelectedPlanId(plan.id)
+                        }}
+                      >
+                        {selected
+                          ? 'Este já é o seu plano'
+                          : plan.paid
+                            ? `Escolher ${plan.name}`
+                            : `Usar ${plan.name}`}
+                      </Button>
+                    </Box>
                   )
                 })}
               </Box>
