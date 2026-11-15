@@ -59,6 +59,25 @@ body {
     filter: drop-shadow(0 1px 1px var(--app-font-shadow, #000));
   }
 
+  // Aviso de acesso negado: tipografia própria (fundo escuro)
+  .access-denied-card,
+  .access-denied-card .MuiTypography-root,
+  .access-denied-card .MuiButton-root,
+  .access-denied-card .MuiSvgIcon-root,
+  .access-denied-card p,
+  .access-denied-card span,
+  .access-denied-card button {
+    color: #fff7ed !important;
+    -webkit-text-fill-color: #fff7ed !important;
+    text-shadow: none !important;
+    filter: none !important;
+  }
+
+  .access-denied-card .access-denied-cta.MuiButton-root {
+    color: #7c2d12 !important;
+    -webkit-text-fill-color: #7c2d12 !important;
+  }
+
   // Superfícies claras: texto escuro (não usam a cor de fonte do painel)
   .MuiDialog-paper,
   .MuiMenu-paper:not(.header-user-menu-paper),

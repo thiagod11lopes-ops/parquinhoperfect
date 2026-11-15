@@ -80,8 +80,9 @@ export default function Login() {
   const showAuthError = (message) => {
     const text = message || 'Não foi possível entrar.'
     if (isUnauthorizedAccessMessage(text)) {
-      setError('')
+      // Overlay moderno + alerta de backup na tela
       setAccessDenied(text)
+      setError(text)
       return
     }
     setAccessDenied(null)

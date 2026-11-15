@@ -476,17 +476,14 @@
 }
 
 .access-denied-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1400;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 80 !important;
   display: grid;
   place-items: end center;
   padding: 1rem 1rem 1.35rem;
   pointer-events: auto;
-}
-
-#phone-app-root {
-  position: relative;
+  box-sizing: border-box;
 }
 
 .access-denied-backdrop {

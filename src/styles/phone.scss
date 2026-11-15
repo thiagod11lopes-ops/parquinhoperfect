@@ -150,11 +150,19 @@
     opacity: var(--app-bg-opacity, 1);
   }
 
-  > *:not(.MuiModal-root):not(.MuiPopover-root):not(.MuiPopper-root) {
+  > *:not(.MuiModal-root):not(.MuiPopover-root):not(.MuiPopper-root):not(.access-denied-overlay) {
     position: relative;
     z-index: 1;
     height: 100%;
     min-height: 0;
+  }
+
+  > .access-denied-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 80 !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
 
   // Popovers/menus do header: fixed (alinhados ao avatar/sino)
