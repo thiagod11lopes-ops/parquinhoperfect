@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useCallback, useContext, useState, useEffect } from 'react'
 import {
   resolveEmailAccess,
   resolvePhoneAccess,
@@ -13,6 +13,16 @@ import {
   firebaseSignUpWithPassword,
   firebaseStartPhoneSignIn,
 } from '../firebase/authMethods'
+import { setLocalOnlyMode } from '../firebase/syncedStorage'
+import { isSaasOwnerEmail } from '../saas/owner'
+
+const LOCAL_ADMIN_EMAIL = 'local@dispositivo.local'
+const LOCAL_ROLE_NAME = {
+  administrador: 'Administrador local',
+  gerente: 'Gerente local',
+  professor: 'Professor local',
+  responsavel: 'Responsável local',
+}
 
 const AuthContext = createContext()
 
@@ -21,6 +31,7 @@ export function useAuth() {
 }
 
 export const ROLE_ROUTES = {
+  saas_owner: ['/saas'],
   administrador: [
     '/dashboard', '/children', '/staff', '/historico', '/balanco', '/activities',
     '/chat', '/informacoes', '/avaliacoes', '/unidades', '/configuracao',
@@ -61,6 +72,7 @@ export const ROLE_ROUTES = {
 }
 
 export const ROLE_HOME = {
+  saas_owner: '/saas',
   administrador: '/dashboard',
   admin: '/dashboard',
   gerente: '/dashboard',
@@ -69,12 +81,43 @@ export const ROLE_HOME = {
   parent: '/responsavel',
 }
 
+function buildSaasOwnerUser(email, name, authMeta = {}) {
+  const mail = normalizeEmail(email)
+  return {
+    id: authMeta.uid || 'saas-owner',
+    email: mail,
+    name: String(name || authMeta.name || '').trim() || 'SaaS Owner',
+    role: 'saas_owner',
+    tenantId: null,
+    adminEmail: null,
+    adminName: null,
+    unitId: null,
+    unitName: null,
+    authProvider: authMeta.provider || 'google',
+    photoURL: authMeta.photoURL || null,
+    phone: authMeta.phone || null,
+    firebaseUid: authMeta.uid || null,
+  }
+}
+
 function normalizeUser(raw) {
   if (!raw) return null
-  if (raw.role === 'membro') return { ...raw, role: 'professor' }
-  if (raw.role === 'parent') return { ...raw, role: 'responsavel' }
-  if (raw.role === 'admin') return { ...raw, role: 'administrador' }
-  return raw
+  let next = { ...raw }
+  if (next.role === 'membro') next = { ...next, role: 'professor' }
+  if (next.role === 'parent') next = { ...next, role: 'responsavel' }
+  if (next.role === 'admin') next = { ...next, role: 'administrador' }
+  if (isSaasOwnerEmail(next.email)) {
+    return {
+      ...next,
+      role: 'saas_owner',
+      tenantId: null,
+      unitId: null,
+      unitName: null,
+      adminEmail: null,
+      adminName: null,
+    }
+  }
+  return next
 }
 
 function inviteErrorForRole(wanted) {
@@ -95,6 +138,7 @@ export function AuthProvider({ children }) {
         const parsed = normalizeUser(JSON.parse(stored))
         setUser(parsed)
         if (parsed) localStorage.setItem('daycareUser', JSON.stringify(parsed))
+        if (parsed?.authProvider === 'local') setLocalOnlyMode(true)
       } catch {
         localStorage.removeItem('daycareUser')
       }
@@ -174,6 +218,13 @@ export function AuthProvider({ children }) {
     const wanted = role === 'admin' ? 'administrador' : role
 
     if (wanted === 'administrador') {
+      if (isSaasOwnerEmail(mail)) {
+        return persist(buildSaasOwnerUser(
+          mail,
+          name || authMeta?.name,
+          authMeta || { provider: 'password', email: mail },
+        ))
+      }
       const access = resolveEmailAccess(mail)
       if (access?.kind === 'admin') {
         return persist(buildUserFromAccess({
@@ -250,12 +301,46 @@ export function AuthProvider({ children }) {
     })
   }
 
+  const loginLocalOnly = async (role) => {
+    setLocalOnlyMode(true)
+    await firebaseSignOut()
+
+    const wanted = role === 'admin' ? 'administrador' : role
+    const name = LOCAL_ROLE_NAME[wanted] || 'Usuário local'
+
+    if (wanted === 'administrador') {
+      return {
+        success: false,
+        needsAdminCreate: true,
+        email: LOCAL_ADMIN_EMAIL,
+        name,
+        authMeta: {
+          provider: 'local',
+          uid: 'local-admin',
+          email: LOCAL_ADMIN_EMAIL,
+          name,
+        },
+      }
+    }
+
+    return {
+      success: false,
+      error: 'No modo sem senha, entre como Administrador. Os dados ficam só neste aparelho.',
+    }
+  }
+
   const loginWithGoogle = async (role) => {
+    setLocalOnlyMode(false)
     const identity = await firebaseSignInWithGoogle()
     if (!identity?.success) return identity
 
     const wanted = role === 'admin' ? 'administrador' : role
     const mail = normalizeEmail(identity.email)
+
+    // Dono do SaaS: console separado (não cria/entra em tenant de creche)
+    if (wanted === 'administrador' && isSaasOwnerEmail(mail)) {
+      return persist(buildSaasOwnerUser(mail, identity.name, identity))
+    }
 
     // Valida a pirâmide logo após o Google, antes de liberar sessão do app
     if (wanted !== 'administrador') {
@@ -282,6 +367,7 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'A senha precisa ter pelo menos 6 caracteres.' }
     }
 
+    setLocalOnlyMode(false)
     const wanted = role === 'admin' ? 'administrador' : role
 
     // Valida a pirâmide ANTES do Firebase (exceto admin criando banco novo)
@@ -352,6 +438,7 @@ export function AuthProvider({ children }) {
   }
 
   const confirmPhoneLogin = async (role, confirmation, code) => {
+    setLocalOnlyMode(false)
     const identity = await firebaseConfirmPhoneCode(confirmation, code)
     return finishWithFirebaseIdentity(role, identity)
   }
@@ -379,27 +466,41 @@ export function AuthProvider({ children }) {
     firebaseUid: authMeta.uid || null,
   })
 
-  const selectActiveUnit = (unitId, unitName) => {
-    if (!user) return { success: false, error: 'Sessão inválida.' }
-    const id = String(unitId || '').trim()
+  const selectActiveUnit = useCallback((nextUnitId, unitName) => {
+    const id = String(nextUnitId || '').trim()
     if (!id) return { success: false, error: 'Selecione uma unidade.' }
-    const next = {
-      ...user,
-      unitId: id,
-      unitName: String(unitName || '').trim() || 'Unidade',
+    try {
+      const raw = localStorage.getItem('daycareUser')
+      const prev = raw ? JSON.parse(raw) : null
+      if (!prev || typeof prev !== 'object') {
+        return { success: false, error: 'Sessão inválida.' }
+      }
+      const next = {
+        ...prev,
+        unitId: id,
+        unitName: String(unitName || '').trim() || 'Unidade',
+      }
+      localStorage.setItem('daycareUser', JSON.stringify(next))
+      setUser(next)
+      return { success: true, unitId: id, unitName: next.unitName }
+    } catch {
+      return { success: false, error: 'Sessão inválida.' }
     }
-    setUser(next)
-    localStorage.setItem('daycareUser', JSON.stringify(next))
-    return { success: true }
-  }
+  }, [])
 
-  const clearActiveUnit = () => {
-    if (!user) return { success: false }
-    const next = { ...user, unitId: null, unitName: null }
-    setUser(next)
-    localStorage.setItem('daycareUser', JSON.stringify(next))
-    return { success: true }
-  }
+  const clearActiveUnit = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('daycareUser')
+      const prev = raw ? JSON.parse(raw) : null
+      if (!prev || typeof prev !== 'object') return { success: false }
+      const next = { ...prev, unitId: null, unitName: null }
+      localStorage.setItem('daycareUser', JSON.stringify(next))
+      setUser(next)
+      return { success: true }
+    } catch {
+      return { success: false }
+    }
+  }, [])
 
   const logout = async () => {
     setUser(null)
@@ -418,7 +519,8 @@ export function AuthProvider({ children }) {
     return false
   }
 
-  const isAdmin = user?.role === 'administrador' || user?.role === 'admin'
+  const isSaasOwner = user?.role === 'saas_owner' || isSaasOwnerEmail(user?.email)
+  const isAdmin = !isSaasOwner && (user?.role === 'administrador' || user?.role === 'admin')
   const isGerenteOnly = user?.role === 'gerente'
   const isGerente = isGerenteOnly || isAdmin
   const isProfessor = user?.role === 'professor'
@@ -429,6 +531,7 @@ export function AuthProvider({ children }) {
       user,
       loginWithEmail,
       loginWithGoogle,
+      loginLocalOnly,
       loginWithPassword,
       startPhoneLogin,
       confirmPhoneLogin,
@@ -441,6 +544,7 @@ export function AuthProvider({ children }) {
       logout,
       canAccess,
       isAuthenticated: !!user,
+      isSaasOwner,
       isAdmin,
       isGerente,
       isGerenteOnly,

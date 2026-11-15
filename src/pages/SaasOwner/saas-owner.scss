@@ -1,0 +1,296 @@
+.saas-shell {
+  --saas-bg: #0f1a14;
+  --saas-panel: #16241c;
+  --saas-line: rgba(255, 255, 255, 0.08);
+  --saas-text: #f3f7f4;
+  --saas-muted: #9cb0a4;
+  --saas-accent: #3ecf8e;
+  --saas-blue: #5b9dff;
+  --saas-orange: #ff9f5a;
+  --saas-amber: #f5c542;
+
+  min-height: 100vh;
+  padding: 28px 24px 48px;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(62, 207, 142, 0.18), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(91, 157, 255, 0.12), transparent 50%),
+    var(--saas-bg);
+  color: var(--saas-text);
+  font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+}
+
+.saas-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.saas-kicker {
+  font-size: 0.72rem !important;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--saas-accent) !important;
+  font-weight: 700 !important;
+  margin-bottom: 4px !important;
+}
+
+.saas-title {
+  font-size: 1.75rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  margin: 0 !important;
+}
+
+.saas-sub {
+  color: var(--saas-muted) !important;
+  font-size: 0.9rem !important;
+  margin-top: 4px !important;
+}
+
+.saas-btn-ghost {
+  color: var(--saas-text) !important;
+  border: 1px solid var(--saas-line) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  text-transform: none !important;
+  border-radius: 10px !important;
+  &:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+  }
+}
+
+.saas-grid-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.saas-stat {
+  background: var(--saas-panel);
+  border: 1px solid var(--saas-line);
+  border-radius: 14px;
+  padding: 16px 14px;
+  border-top: 3px solid rgba(255, 255, 255, 0.15);
+
+  &--green { border-top-color: var(--saas-accent); }
+  &--blue { border-top-color: var(--saas-blue); }
+  &--orange { border-top-color: var(--saas-orange); }
+  &--amber { border-top-color: var(--saas-amber); }
+}
+
+.saas-stat-label {
+  font-size: 0.75rem !important;
+  color: var(--saas-muted) !important;
+  margin-bottom: 6px !important;
+}
+
+.saas-stat-value {
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+.saas-stat-hint {
+  font-size: 0.72rem !important;
+  color: var(--saas-muted) !important;
+  margin-top: 6px !important;
+}
+
+.saas-section {
+  background: var(--saas-panel);
+  border: 1px solid var(--saas-line);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.saas-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--saas-muted);
+}
+
+.saas-section-title {
+  font-size: 1rem !important;
+  font-weight: 650 !important;
+  color: var(--saas-text) !important;
+}
+
+.saas-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.saas-plan-card {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--saas-line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.saas-plan-name {
+  font-weight: 700 !important;
+  font-size: 0.95rem !important;
+}
+
+.saas-plan-price {
+  color: var(--saas-accent) !important;
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+  margin: 4px 0 8px !important;
+  span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--saas-muted);
+    margin-left: 2px;
+  }
+}
+
+.saas-plan-count {
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+}
+
+.saas-plan-meta,
+.saas-plan-mrr {
+  font-size: 0.75rem !important;
+  color: var(--saas-muted) !important;
+  margin-top: 4px !important;
+}
+
+.saas-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.saas-balance-card {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid var(--saas-line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--saas-muted);
+}
+
+.saas-balance-label {
+  font-size: 0.78rem !important;
+  color: var(--saas-muted) !important;
+}
+
+.saas-balance-value {
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: var(--saas-text) !important;
+}
+
+.saas-filters {
+  margin-bottom: 14px !important;
+}
+
+.saas-field {
+  .MuiOutlinedInput-root {
+    color: var(--saas-text);
+    background: rgba(0, 0, 0, 0.25);
+    fieldset { border-color: var(--saas-line); }
+    &:hover fieldset { border-color: rgba(255, 255, 255, 0.2); }
+  }
+  .MuiInputLabel-root { color: var(--saas-muted); }
+  &--sm { min-width: 140px; }
+}
+
+.saas-empty {
+  background: rgba(91, 157, 255, 0.12) !important;
+  color: var(--saas-text) !important;
+  border: 1px solid rgba(91, 157, 255, 0.25);
+}
+
+.saas-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--saas-line);
+}
+
+.saas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+
+  th, td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--saas-line);
+    white-space: nowrap;
+  }
+
+  th {
+    color: var(--saas-muted);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.saas-td-main {
+  font-weight: 600;
+}
+
+.saas-td-sub {
+  font-size: 0.75rem;
+  color: var(--saas-muted);
+}
+
+.saas-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-transform: capitalize;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--saas-muted);
+
+  &--active {
+    background: rgba(62, 207, 142, 0.18);
+    color: var(--saas-accent);
+  }
+  &--trialing {
+    background: rgba(245, 197, 66, 0.18);
+    color: var(--saas-amber);
+  }
+  &--expired,
+  &--canceled {
+    background: rgba(255, 100, 100, 0.15);
+    color: #ff8e8e;
+  }
+  &--pending {
+    background: rgba(91, 157, 255, 0.18);
+    color: var(--saas-blue);
+  }
+}
+
+.saas-footnote {
+  font-size: 0.75rem !important;
+  color: var(--saas-muted) !important;
+  margin-top: 8px !important;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .saas-shell { padding: 18px 14px 36px; }
+  .saas-title { font-size: 1.4rem !important; }
+}

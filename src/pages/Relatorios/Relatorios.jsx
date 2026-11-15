@@ -18,6 +18,7 @@ import {
   exportBalanceExcel,
   exportBalancePdf,
 } from '../../utils/exportReports'
+import ExportRangeModal from './ExportRangeModal'
 import '../../styles/global.scss'
 
 const REPORTS = [
@@ -59,6 +60,7 @@ export default function Relatorios() {
   const [selectedUnitId, setSelectedUnitId] = useState(unitId || (units[0]?.id || ''))
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(null)
+  const [exportTarget, setExportTarget] = useState(null) // { report, format }
 
   const selectedUnit = useMemo(
     () => units.find((u) => u.id === selectedUnitId) || null,
@@ -69,6 +71,28 @@ export default function Relatorios() {
   const exportUnitName = isAdmin
     ? (selectedUnit?.name || 'Todas as unidades')
     : (unitName || 'Unidade')
+
+  const markedDates = useMemo(() => {
+    const childIds = exportUnitId
+      ? new Set(
+        (childrenList || [])
+          .filter((c) => (c.unitId ? c.unitId === exportUnitId : true))
+          .map((c) => String(c.id)),
+      )
+      : null
+    const dates = new Set()
+    ;(attendanceList || []).forEach((row) => {
+      if (exportUnitId) {
+        if (row.unitId && row.unitId !== exportUnitId) return
+        if (!row.unitId && row.childId != null && childIds && !childIds.has(String(row.childId))) {
+          return
+        }
+      }
+      const iso = String(row.date || '').slice(0, 10)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) dates.add(iso)
+    })
+    return [...dates]
+  }, [attendanceList, childrenList, exportUnitId])
 
   const ctx = useMemo(() => {
     const scopedUnits = isAdmin
@@ -88,12 +112,19 @@ export default function Relatorios() {
     selectedUnitId, exportUnitId, exportUnitName,
   ])
 
-  const runExport = async (report, format) => {
+  const openExportModal = (report, format) => {
+    setFeedback(null)
+    setExportTarget({ report, format })
+  }
+
+  const runExport = async (dateFilter) => {
+    if (!exportTarget) return
+    const { report, format } = exportTarget
     setFeedback(null)
     setBusy(`${report.id}-${format}`)
     try {
       const fn = format === 'pdf' ? report.pdf : report.excel
-      const result = fn(ctx)
+      const result = fn({ ...ctx, dateFilter })
       if (!result.success) {
         setFeedback({ ok: false, text: result.error || 'Falha ao exportar.' })
         return
@@ -102,6 +133,7 @@ export default function Relatorios() {
         ok: true,
         text: `${report.title} exportado em ${format.toUpperCase()} (${result.count} registro(s)).`,
       })
+      setExportTarget(null)
     } catch (err) {
       setFeedback({ ok: false, text: err?.message || 'Erro ao gerar o arquivo.' })
     } finally {
@@ -161,7 +193,7 @@ export default function Relatorios() {
                 className="btn-orange-card"
                 startIcon={<TableViewIcon />}
                 disabled={Boolean(busy)}
-                onClick={() => runExport(report, 'excel')}
+                onClick={() => openExportModal(report, 'excel')}
                 sx={{ flex: 1, minWidth: 0 }}
               >
                 {busy === `${report.id}-excel` ? 'Gerando…' : 'Excel'}
@@ -170,7 +202,7 @@ export default function Relatorios() {
                 className="btn-orange-card"
                 startIcon={<PictureAsPdfIcon />}
                 disabled={Boolean(busy)}
-                onClick={() => runExport(report, 'pdf')}
+                onClick={() => openExportModal(report, 'pdf')}
                 sx={{ flex: 1, minWidth: 0 }}
               >
                 {busy === `${report.id}-pdf` ? 'Gerando…' : 'PDF'}
@@ -184,6 +216,16 @@ export default function Relatorios() {
         Arquivos gerados no dispositivo de {user?.name || 'usuário'}.
         O Excel abre no Microsoft Excel / LibreOffice; o PDF no leitor padrão.
       </Typography>
+
+      <ExportRangeModal
+        open={Boolean(exportTarget)}
+        onClose={() => !busy && setExportTarget(null)}
+        onConfirm={runExport}
+        reportTitle={exportTarget?.report?.title || 'Relatório'}
+        format={exportTarget?.format || 'excel'}
+        busy={Boolean(busy)}
+        markedDates={markedDates}
+      />
     </Box>
   )
 }

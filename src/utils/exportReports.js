@@ -8,6 +8,29 @@ function pad(n) {
   return String(n).padStart(2, '0')
 }
 
+/** Converte ISO (yyyy-mm-dd), Date ou string já pt-BR para dd/mm/aaaa */
+function formatDateBr(value) {
+  if (value == null || value === '' || value === '—') return '—'
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${pad(value.getDate())}/${pad(value.getMonth() + 1)}/${value.getFullYear()}`
+  }
+  const raw = String(value).trim()
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`
+  const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (br) return `${pad(br[1])}/${pad(br[2])}/${br[3]}`
+  const brShort = raw.match(/^(\d{1,2})\/(\d{1,2})$/)
+  if (brShort) {
+    const year = new Date().getFullYear()
+    return `${pad(brShort[1])}/${pad(brShort[2])}/${year}`
+  }
+  const parsed = new Date(raw)
+  if (!Number.isNaN(parsed.getTime()) && /^\d{4}/.test(raw)) {
+    return `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}/${parsed.getFullYear()}`
+  }
+  return raw
+}
+
 function stamp() {
   const d = new Date()
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`
@@ -55,18 +78,53 @@ function makePdf({ title, subtitle, columns, rows, fileName }) {
   doc.save(fileName)
 }
 
-function filterAttendanceByUnit(attendanceList, childrenList, unitId) {
+function toIsoDay(value) {
+  if (!value) return ''
+  const raw = String(value).trim()
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
+  const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (br) return `${br[3]}-${pad(br[2])}-${pad(br[1])}`
+  return raw.slice(0, 10)
+}
+
+/** dateFilter: { mode: 'all'|'range'|'day', date?, from?, to? } */
+function matchesDateFilter(isoDate, dateFilter) {
+  if (!dateFilter || dateFilter.mode === 'all') return true
+  const d = toIsoDay(isoDate)
+  if (!d) return false
+  if (dateFilter.mode === 'day') {
+    const target = toIsoDay(dateFilter.date)
+    return Boolean(target) && d === target
+  }
+  if (dateFilter.mode === 'range') {
+    const from = toIsoDay(dateFilter.from)
+    const to = toIsoDay(dateFilter.to)
+    if (from && d < from) return false
+    if (to && d > to) return false
+    return Boolean(from || to)
+  }
+  return true
+}
+
+function filterAttendanceByUnit(attendanceList, childrenList, unitId, dateFilter) {
   const list = Array.isArray(attendanceList) ? attendanceList : []
-  if (!unitId) return list
-  const childIds = new Set(
-    (childrenList || [])
-      .filter((c) => (c.unitId ? c.unitId === unitId : true))
-      .map((c) => String(c.id)),
-  )
+  const childIds = unitId
+    ? new Set(
+      (childrenList || [])
+        .filter((c) => (c.unitId ? c.unitId === unitId : true))
+        .map((c) => String(c.id)),
+    )
+    : null
   return list.filter((a) => {
-    if (a.unitId) return a.unitId === unitId
-    if (a.childId != null) return childIds.has(String(a.childId))
-    return true
+    if (unitId) {
+      if (a.unitId) {
+        if (a.unitId !== unitId) return false
+      } else if (a.childId != null && childIds && !childIds.has(String(a.childId))) {
+        return false
+      }
+    }
+    return matchesDateFilter(a.date, dateFilter)
   })
 }
 
@@ -78,11 +136,11 @@ function filterChildrenByUnit(childrenList, unitId) {
 
 /** Presença / histórico de entradas e saídas */
 export function buildPresenceRows({
-  attendanceList, childrenList, unitId, unitName,
+  attendanceList, childrenList, unitId, unitName, dateFilter,
 }) {
-  const rows = filterAttendanceByUnit(attendanceList, childrenList, unitId)
+  const rows = filterAttendanceByUnit(attendanceList, childrenList, unitId, dateFilter)
   return rows.map((a) => ({
-    Data: a.date || '—',
+    Data: formatDateBr(a.date),
     Criança: a.childName || '—',
     Entrada: a.entryTime || '—',
     Saída: a.exitTime || '—',
@@ -107,7 +165,7 @@ export function buildChildrenRows({ childrenList, unitId, unitName }) {
 
 /** Balanço de lotação por unidade + histórico diário */
 export function buildBalanceRows({
-  units, childrenList, tenantId, activeUnitId,
+  units, childrenList, tenantId, activeUnitId, dateFilter,
 }) {
   const occ = buildUnitsOccupancy({
     units,
@@ -124,17 +182,20 @@ export function buildBalanceRows({
     Status: r.atLimit ? 'Lotação máxima' : (r.nearLimit ? 'Quase cheio' : 'Normal'),
   }))
 
+  const historyDays = dateFilter?.mode === 'all' || !dateFilter ? 14 : 366
   const history = buildDailyHistory(
     tenantId,
     (units || []).map((u) => u.id),
-    14,
+    historyDays,
     occ.totals.max,
-  ).map((h) => ({
-    Data: h.label,
-    Presentes: h.presentes,
-    Capacidade: h.capacidade,
-    'Ocupação %': h.pct,
-  }))
+  )
+    .filter((h) => matchesDateFilter(h.key, dateFilter))
+    .map((h) => ({
+      Data: formatDateBr(h.key || h.label),
+      Presentes: h.presentes,
+      Capacidade: h.capacidade,
+      'Ocupação %': h.pct,
+    }))
 
   return { unitRows, history, totals: occ.totals }
 }

@@ -1,12 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
+import {
+  DEFAULT_UNIT_MAX,
+  loadUnitMaxChildren,
+  saveUnitMaxChildren,
+} from '../utils/unitCapacity'
 
 const ParkSettingsContext = createContext(null)
 
-const MAX_STORAGE_KEY_LEGACY = 'parquinhoMaxChildren'
 const INFO_STORAGE_KEY_LEGACY = 'parquinhoParkInfo'
-export const DEFAULT_MAX_CHILDREN = 20
+export const DEFAULT_MAX_CHILDREN = DEFAULT_UNIT_MAX
 export const MAX_INTERVALS_PER_DAY = 4
 
 export const WEEK_DAYS = [
@@ -89,24 +93,6 @@ function scopeKey(base, tenantId, unitId) {
   return `${base}:${t}:${u}`
 }
 
-function loadMaxChildren(tenantId, unitId) {
-  try {
-    const key = scopeKey(MAX_STORAGE_KEY_LEGACY, tenantId, unitId)
-    let raw = syncedStorage.getItem(key)
-    if (raw == null && unitId) {
-      // migração: copia legado global uma vez
-      raw = syncedStorage.getItem(MAX_STORAGE_KEY_LEGACY)
-      if (raw != null) syncedStorage.setItem(key, raw)
-    }
-    if (raw == null) return DEFAULT_MAX_CHILDREN
-    const n = Number(raw)
-    if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_CHILDREN
-    return Math.min(200, Math.floor(n))
-  } catch {
-    return DEFAULT_MAX_CHILDREN
-  }
-}
-
 function loadParkInfo(tenantId, unitId) {
   try {
     const key = scopeKey(INFO_STORAGE_KEY_LEGACY, tenantId, unitId)
@@ -153,7 +139,7 @@ export function useParkSettings() {
 
 export function ParkSettingsProvider({ children }) {
   const { tenantId, unitId } = useAuth()
-  const [maxChildren, setMaxChildrenState] = useState(() => loadMaxChildren(tenantId, unitId))
+  const [maxChildren, setMaxChildrenState] = useState(() => loadUnitMaxChildren(tenantId, unitId))
   const [hours, setHoursState] = useState(() => loadParkInfo(tenantId, unitId).hours)
   const [generalInfo, setGeneralInfoState] = useState(() => loadParkInfo(tenantId, unitId).generalInfo)
 
@@ -161,7 +147,7 @@ export function ParkSettingsProvider({ children }) {
     const next = loadParkInfo(tenantId, unitId)
     setHoursState(next.hours)
     setGeneralInfoState(next.generalInfo)
-    setMaxChildrenState(loadMaxChildren(tenantId, unitId))
+    setMaxChildrenState(loadUnitMaxChildren(tenantId, unitId))
   }, [tenantId, unitId])
 
   useEffect(() => {
@@ -180,14 +166,17 @@ export function ParkSettingsProvider({ children }) {
     }
   }, [reloadAll])
 
-  const setMaxChildren = useCallback((value) => {
-    const n = Math.min(200, Math.max(1, Math.floor(Number(value) || DEFAULT_MAX_CHILDREN)))
-    const key = scopeKey(MAX_STORAGE_KEY_LEGACY, tenantId, unitId)
-    syncedStorage.setItem(key, String(n))
-    setMaxChildrenState(n)
-    window.dispatchEvent(new CustomEvent('parquinho-park-settings'))
+  const setMaxChildrenForUnit = useCallback((targetUnitId, value) => {
+    const n = saveUnitMaxChildren(tenantId, targetUnitId || unitId, value)
+    if (!targetUnitId || targetUnitId === unitId) {
+      setMaxChildrenState(n)
+    }
     return n
   }, [tenantId, unitId])
+
+  const setMaxChildren = useCallback((value) => (
+    setMaxChildrenForUnit(unitId, value)
+  ), [setMaxChildrenForUnit, unitId])
 
   const saveParkInfo = useCallback((nextHours, nextGeneralInfo) => {
     const payload = {
@@ -204,6 +193,7 @@ export function ParkSettingsProvider({ children }) {
     <ParkSettingsContext.Provider value={{
       maxChildren,
       setMaxChildren,
+      setMaxChildrenForUnit,
       hours,
       generalInfo,
       saveParkInfo,

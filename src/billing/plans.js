@@ -2,75 +2,120 @@
 
 export const TRIAL_DAYS = 7
 
+/** Alias de IDs antigos → atuais */
+const PLAN_ID_ALIASES = {
+  starter: 'basic',
+  enterprise: 'premium',
+}
+
 export const BILLING_PLANS = [
   {
-    id: 'starter',
-    name: 'Starter',
-    price: 79.9,
+    id: 'free',
+    name: 'Grátis',
+    price: 0,
+    compareAtPrice: 29.9,
     currency: 'BRL',
     period: 'month',
-    description: 'Ideal para começar com uma unidade.',
+    description: 'Comece sem custo para conhecer o Parquinho.',
+    features: [
+      '1 unidade',
+      'Até 15 crianças',
+      'Presença e chat básicos',
+      'Onboarding incluso',
+    ],
+    limits: { maxUnits: 1, maxChildren: 15 },
+    highlight: false,
+    paid: false,
+  },
+  {
+    id: 'basic',
+    name: 'Básico',
+    price: 29.9,
+    currency: 'BRL',
+    period: 'month',
+    description: 'Para um parquinho em operação diária.',
     features: [
       '1 unidade',
       'Até 40 crianças',
-      'Equipe e responsáveis',
-      'Presença e chat',
+      'Presença, chat e histórico',
+      'Onboarding incluso',
     ],
     limits: { maxUnits: 1, maxChildren: 40 },
     highlight: false,
+    paid: true,
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: 149.9,
+    price: 59.9,
     currency: 'BRL',
     period: 'month',
     description: 'Para redes com mais unidades e demanda.',
     features: [
       'Até 5 unidades',
       'Até 200 crianças',
+      'Chamadas com botão de emergência',
       'Relatórios avançados',
-      'Prioridade de suporte',
+      'Onboarding incluso',
     ],
     limits: { maxUnits: 5, maxChildren: 200 },
     highlight: true,
+    paid: true,
   },
   {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: 299.9,
+    id: 'premium',
+    name: 'Premium',
+    price: 129.9,
     currency: 'BRL',
     period: 'month',
     description: 'Capacidade ampliada para operação completa.',
     features: [
       'Unidades ilimitadas',
       'Crianças ilimitadas',
-      'Onboarding assistido',
+      'Chamadas com botão de emergência',
       'SLA comercial',
+      'Onboarding incluso',
     ],
     limits: { maxUnits: null, maxChildren: null },
     highlight: false,
+    paid: true,
   },
 ]
 
+export function normalizePlanId(planId) {
+  const id = String(planId || '').trim()
+  return PLAN_ID_ALIASES[id] || id || 'free'
+}
+
 export function getPlanById(planId) {
-  return BILLING_PLANS.find((p) => p.id === planId) || null
+  const id = normalizePlanId(planId)
+  return BILLING_PLANS.find((p) => p.id === id) || null
 }
 
 export function formatPlanPrice(plan) {
   if (!plan) return '—'
+  if (!plan.price || plan.price <= 0) {
+    const compare = Number(plan.compareAtPrice)
+    if (Number.isFinite(compare) && compare > 0) {
+      return compare.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: plan.currency || 'BRL',
+      })
+    }
+    return 'Grátis'
+  }
   return plan.price.toLocaleString('pt-BR', {
     style: 'currency',
     currency: plan.currency || 'BRL',
   })
 }
 
-export function createTrialSubscription(planId = 'starter') {
+export function createTrialSubscription(planId = 'free') {
   const now = new Date()
   const trialEnds = new Date(now)
   trialEnds.setDate(trialEnds.getDate() + TRIAL_DAYS)
   return {
-    planId,
+    planId: normalizePlanId(planId),
     status: 'trialing',
     provider: 'mercado_pago',
     trialEndsAt: trialEnds.toISOString(),
@@ -85,7 +130,7 @@ export function createTrialSubscription(planId = 'starter') {
 export function normalizeSubscription(raw, createdAt) {
   if (raw && typeof raw === 'object') {
     return {
-      planId: raw.planId || 'starter',
+      planId: normalizePlanId(raw.planId || 'free'),
       status: raw.status || 'trialing',
       provider: raw.provider || 'mercado_pago',
       trialEndsAt: raw.trialEndsAt || null,
@@ -104,7 +149,7 @@ export function normalizeSubscription(raw, createdAt) {
   const now = Date.now()
   const activeTrial = trialEnds.getTime() > now
   return {
-    planId: 'starter',
+    planId: 'free',
     status: activeTrial ? 'trialing' : 'expired',
     provider: 'mercado_pago',
     trialEndsAt: trialEnds.toISOString(),

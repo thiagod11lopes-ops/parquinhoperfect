@@ -199,8 +199,41 @@
   }
 }
 
-// Em celular real: ocupa a tela toda, sem moldura
-@media (max-width: 480px) {
+// Celular real: tela cheia, sem moldura e sem barra de hora/bateria
+.phone-stage.is-native {
+  padding: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #000;
+}
+
+.phone-device.is-native {
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.phone-device.is-native .phone-notch,
+.phone-device.is-native .phone-status-bar,
+.phone-device.is-native .phone-home-indicator {
+  display: none !important;
+}
+
+.phone-device.is-native .phone-screen {
+  flex: 1;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+}
+
+// Fallback CSS caso o matchMedia ainda não tenha rodado / JS off
+@media (max-width: 767px), ((hover: none) and (pointer: coarse)) {
   .phone-stage {
     padding: 0;
     background: #000;
@@ -210,22 +243,15 @@
     width: 100vw;
     height: 100vh;
     height: 100dvh;
+    max-width: none;
     border-radius: 0;
     border: none;
     box-shadow: none;
   }
 
-  .phone-notch {
-    top: max(8px, env(safe-area-inset-top));
-  }
-
-  .phone-status-bar {
-    padding-top: max(10px, env(safe-area-inset-top));
-    height: calc(36px + env(safe-area-inset-top, 0px));
-  }
-
+  .phone-notch,
+  .phone-status-bar,
   .phone-home-indicator {
-    height: calc(16px + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: none !important;
   }
 }

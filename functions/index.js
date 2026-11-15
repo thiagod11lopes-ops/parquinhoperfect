@@ -8,9 +8,13 @@ const db = admin.firestore()
 const MP_ACCESS_TOKEN = defineSecret('MP_ACCESS_TOKEN')
 
 const PLANS = {
-  starter: { id: 'starter', title: 'Parquinho Starter', price: 79.9 },
-  pro: { id: 'pro', title: 'Parquinho Pro', price: 149.9 },
-  enterprise: { id: 'enterprise', title: 'Parquinho Enterprise', price: 299.9 },
+  free: { id: 'free', title: 'Parquinho Grátis', price: 0 },
+  basic: { id: 'basic', title: 'Parquinho Básico', price: 29.9 },
+  // aliases antigos
+  starter: { id: 'basic', title: 'Parquinho Básico', price: 29.9 },
+  pro: { id: 'pro', title: 'Parquinho Pro', price: 59.9 },
+  premium: { id: 'premium', title: 'Parquinho Premium', price: 129.9 },
+  enterprise: { id: 'premium', title: 'Parquinho Premium', price: 129.9 },
 }
 
 function tenantDocId(tenantId) {
@@ -95,9 +99,21 @@ exports.createMpCheckout = onRequest({ secrets: [MP_ACCESS_TOKEN], cors: true },
     } = req.body || {}
     const plan = PLANS[planId]
     if (!plan) return res.status(400).json({ error: 'Plano inválido.' })
+    if (!plan.price || plan.price <= 0) {
+      return res.status(400).json({ error: 'Plano gratuito não usa checkout.' })
+    }
     if (!tenantId) return res.status(400).json({ error: 'tenantId obrigatório.' })
 
     const token = MP_ACCESS_TOKEN.value()
+    const webhookUrl = 'https://us-central1-parquinhoperfect.cloudfunctions.net/mpWebhook'
+    // Mercado Pago exige HTTPS nas back_urls; HTTP (localhost) causa "Ops, ocorreu um erro"
+    const safeBackUrls = backUrls && typeof backUrls === 'object'
+      ? Object.fromEntries(
+        Object.entries(backUrls).filter(([, url]) => String(url || '').startsWith('https://')),
+      )
+      : null
+    const hasHttpsSuccess = Boolean(safeBackUrls?.success)
+
     const preference = await mpFetch('/checkout/preferences', {
       method: 'POST',
       token,
@@ -110,15 +126,17 @@ exports.createMpCheckout = onRequest({ secrets: [MP_ACCESS_TOKEN], cors: true },
           currency_id: 'BRL',
           unit_price: plan.price,
         }],
-        payer: {
-          email: payerEmail || undefined,
-          name: payerName || undefined,
-        },
+        // Não fixar payer: no sandbox isso conflita com conta Comprador / guest
+        // e costuma gerar "Ops, ocorreu um erro".
         external_reference: `${tenantId}::${plan.id}`,
-        metadata: { tenantId, planId: plan.id },
-        back_urls: backUrls || undefined,
-        auto_return: backUrls?.success ? 'approved' : undefined,
-        notification_url: process.env.MP_WEBHOOK_URL || undefined,
+        metadata: {
+          tenantId,
+          planId: plan.id,
+          payerEmail: payerEmail || null,
+          payerName: payerName || null,
+        },
+        ...(hasHttpsSuccess ? { back_urls: safeBackUrls, auto_return: 'approved' } : {}),
+        notification_url: webhookUrl,
         statement_descriptor: 'PARQUINHO',
       },
     })

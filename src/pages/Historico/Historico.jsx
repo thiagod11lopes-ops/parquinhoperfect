@@ -6,6 +6,8 @@ import SearchIcon from '@mui/icons-material/Search'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import SouthRoundedIcon from '@mui/icons-material/SouthRounded'
+import NorthRoundedIcon from '@mui/icons-material/NorthRounded'
 import { useSampleData } from '../../context/SampleDataContext'
 import { useGuardianSession } from '../../context/GuardianSessionContext'
 import '../../styles/global.scss'
@@ -19,10 +21,10 @@ function durationLabel(entryTime, exitTime) {
   const [xh, xm] = exitTime.split(':').map(Number)
   if (![eh, em, xh, xm].every(Number.isFinite)) return '—'
   const mins = Math.max(0, (xh * 60 + xm) - (eh * 60 + em))
-  if (mins < 60) return `${mins} min`
+  if (mins < 60) return `${mins}m`
   const h = Math.floor(mins / 60)
   const m = mins % 60
-  return m ? `${h}h ${m}min` : `${h}h`
+  return m ? `${h}h${m}` : `${h}h`
 }
 
 function formatDateLabel(isoDate) {
@@ -342,14 +344,21 @@ function HistoricoView({
           ) : null}
         </Box>
 
-        <Box className="historico-table" component="table">
+        <Box
+          className={`historico-table${childOnly ? ' is-child-only' : ''}`}
+          component="table"
+        >
           <thead>
             <tr>
               <th>Data</th>
               <th>Criança</th>
               {!childOnly && <th>Responsável</th>}
-              <th>Entrada</th>
-              <th>Saída</th>
+              <th className="historico-th-icon" title="Entrada" aria-label="Entrada">
+                <SouthRoundedIcon className="historico-th-arrow is-in" />
+              </th>
+              <th className="historico-th-icon" title="Saída" aria-label="Saída">
+                <NorthRoundedIcon className="historico-th-arrow is-out" />
+              </th>
               <th>Tempo</th>
             </tr>
           </thead>

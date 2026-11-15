@@ -10,6 +10,28 @@ import {
 import { db } from './app'
 
 const COLLECTION = 'appData'
+const LOCAL_ONLY_KEY = 'parquinhoLocalOnly'
+
+/** Quando true, dados ficam só no localStorage (sem Firestore). */
+export function isLocalOnlyMode() {
+  try {
+    return localStorage.getItem(LOCAL_ONLY_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function setLocalOnlyMode(enabled) {
+  try {
+    if (enabled) localStorage.setItem(LOCAL_ONLY_KEY, '1')
+    else localStorage.removeItem(LOCAL_ONLY_KEY)
+  } catch {
+    // ignore quota / private mode
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('parquinho-local-only', { detail: { enabled: !!enabled } }))
+  }
+}
 
 /** Firestore doc id from a localStorage key */
 export function toDocId(key) {
@@ -67,6 +89,7 @@ export const syncedStorage = {
 
   setItem(key, value) {
     localStorage.setItem(key, value)
+    if (isLocalOnlyMode()) return
     void cloudSet(key, value).catch((err) => {
       console.warn('[firebase] falha ao sincronizar', key, err)
     })
@@ -74,6 +97,7 @@ export const syncedStorage = {
 
   removeItem(key) {
     localStorage.removeItem(key)
+    if (isLocalOnlyMode()) return
     void setDoc(
       doc(db, COLLECTION, toDocId(key)),
       {
@@ -95,6 +119,7 @@ export const syncedStorage = {
  * Returns list of keys that changed.
  */
 export async function hydrateFromCloud() {
+  if (isLocalOnlyMode()) return []
   const changed = []
   const snap = await getDocs(collection(db, COLLECTION))
   snap.forEach((d) => {
@@ -138,6 +163,7 @@ export async function migrateLocalToCloud(prefixes = [
   'parquinhoAttendance:',
   'sampleDataEnabled',
 ]) {
+  if (isLocalOnlyMode()) return
   const tasks = []
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i)
@@ -157,9 +183,11 @@ export async function migrateLocalToCloud(prefixes = [
 
 /** Live sync: remote changes → localStorage + custom events */
 export function subscribeCloudSync(onKeysChanged) {
+  if (isLocalOnlyMode()) return () => {}
   return onSnapshot(
     collection(db, COLLECTION),
     (snap) => {
+      if (isLocalOnlyMode()) return
       const changed = []
       snap.docChanges().forEach((change) => {
         if (change.type === 'removed') return

@@ -6,10 +6,12 @@ import {
   mealsData as seedMeals,
   staffScheduleData as seedStaffSchedule,
   attendanceData as seedAttendance,
+  sampleUnitsData,
   buildSamplePresenceSessions,
 } from '../data/mockData'
 import { syncedStorage } from '../firebase/syncedStorage'
 import { useAuth } from './AuthContext'
+import { useTenant } from './TenantContext'
 import { seedPresenceFromSamples, clearPresenceSamples } from './PresenceContext'
 
 const SampleDataContext = createContext(null)
@@ -45,7 +47,8 @@ export function useSampleData() {
 }
 
 export function SampleDataProvider({ children }) {
-  const { tenantId, unitId } = useAuth()
+  const { tenantId, unitId, selectActiveUnit } = useAuth()
+  const { seedSampleUnits, restoreUnitsAfterSample } = useTenant()
   const [enabled, setEnabled] = useState(loadEnabled)
 
   const [childrenList, setChildrenListState] = useState([])
@@ -63,14 +66,41 @@ export function SampleDataProvider({ children }) {
   }
 
   const applySeed = useCallback(() => {
-    const kids = seedChildren.map((c) => ({ ...c, unitId: unitId || c.unitId || null }))
+    const unitsResult = seedSampleUnits(tenantId)
+    const units = unitsResult?.units?.length ? unitsResult.units : sampleUnitsData
+    const preferredId = (() => {
+      try {
+        const raw = localStorage.getItem('daycareUser')
+        const parsed = raw ? JSON.parse(raw) : null
+        return parsed?.unitId || null
+      } catch {
+        return null
+      }
+    })()
+    const activeUnit = units.find((u) => u.id === preferredId) || units[0]
+    if (activeUnit) {
+      selectActiveUnit?.(activeUnit.id, activeUnit.name)
+    }
+    const activeId = activeUnit?.id || units[0]?.id || null
+    const kids = seedChildren.map((c, index) => ({
+      ...c,
+      unitId: units[index % units.length]?.id || activeId,
+    }))
     setChildrenListState(kids)
     setStaffListState(seedStaff.map((s) => ({ ...s })))
     setActivitiesListState(seedActivities.map((a) => ({ ...a })))
     setScheduleListState(seedStaffSchedule.map((s) => ({ ...s })))
-    setAttendanceListState(seedAttendance.map((a) => ({ ...a })))
+    setAttendanceListState(seedAttendance.map((a, index) => ({
+      ...a,
+      unitId: units[index % units.length]?.id || activeId,
+    })))
+    seedPresenceFromSamples(tenantId, activeId, buildSamplePresenceSessions(activeId))
+  }, [tenantId, seedSampleUnits, selectActiveUnit])
+
+  const refreshPresenceForActiveUnit = useCallback(() => {
+    if (!enabled || !unitId) return
     seedPresenceFromSamples(tenantId, unitId, buildSamplePresenceSessions(unitId))
-  }, [tenantId, unitId])
+  }, [enabled, tenantId, unitId])
 
   const loadPersisted = useCallback(() => {
     setChildrenListState(loadList(keys.children))
@@ -92,12 +122,21 @@ export function SampleDataProvider({ children }) {
     persistList(keys.schedule, [])
     persistList(keys.attendance, [])
     clearPresenceSamples(tenantId, unitId)
-  }, [tenantId, unitId, keys])
+    const restored = restoreUnitsAfterSample(tenantId)
+    const first = restored?.units?.[0]
+    if (first) selectActiveUnit?.(first.id, first.name)
+  }, [tenantId, unitId, keys, restoreUnitsAfterSample, selectActiveUnit])
 
   useEffect(() => {
     if (enabled) applySeed()
     else loadPersisted()
-  }, [tenantId, unitId, enabled, applySeed, loadPersisted])
+    // Só re-semeia ao ligar o modo exemplo ou trocar de tenant — não a cada troca de unidade.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId, enabled])
+
+  useEffect(() => {
+    refreshPresenceForActiveUnit()
+  }, [refreshPresenceForActiveUnit])
 
   useEffect(() => {
     const sync = () => {

@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { syncedStorage } from '../firebase/syncedStorage'
+import { sampleRatingsData } from '../data/mockData'
 import { useAuth } from './AuthContext'
+import { useSampleData } from './SampleDataContext'
 
 const RatingsContext = createContext(null)
 
@@ -55,6 +57,7 @@ export function useRatings() {
 
 export function RatingsProvider({ children }) {
   const { user, isResponsavel, isProfessor, isGerente } = useAuth()
+  const { enabled: sampleEnabled } = useSampleData()
   const [ratings, setRatings] = useState(() => loadRatings())
   const [pendingHandover, setPendingHandover] = useState(() => loadHandover())
 
@@ -76,6 +79,13 @@ export function RatingsProvider({ children }) {
       window.removeEventListener('parquinho-handover', reload)
     }
   }, [reload])
+
+  const visibleRatings = useMemo(() => {
+    if (!sampleEnabled) return ratings
+    const sampleIds = new Set(sampleRatingsData.map((r) => r.id))
+    const realOnly = ratings.filter((r) => !sampleIds.has(r.id) && !String(r.id).startsWith('sample-'))
+    return [...sampleRatingsData, ...realOnly]
+  }, [ratings, sampleEnabled])
 
   const startHandover = useCallback((payload) => {
     const handover = {
@@ -171,8 +181,8 @@ export function RatingsProvider({ children }) {
   }, [isProfessor, isResponsavel, pendingHandover])
 
   const value = {
-    ratings: isGerente ? ratings : [],
-    allRatingsCount: ratings.length,
+    ratings: isGerente ? visibleRatings : [],
+    allRatingsCount: visibleRatings.length,
     pendingHandover,
     myPendingHandover,
     startHandover,

@@ -13,6 +13,7 @@ import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
 import EmailIcon from '@mui/icons-material/Email'
 import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
 import { useAppearance } from '../../context/AppearanceContext'
@@ -47,6 +48,7 @@ export default function Login() {
   const location = useLocation()
   const {
     loginWithGoogle,
+    loginLocalOnly,
     loginWithPassword,
     startPhoneLogin,
     confirmPhoneLogin,
@@ -128,7 +130,12 @@ export default function Login() {
   }
 
   const afterLogin = (roleHome) => {
-    navigate(location.state?.from || roleHome || homeRoute || '/dashboard', { replace: true })
+    const target = roleHome || homeRoute || '/dashboard'
+    if (target === '/saas') {
+      navigate('/saas', { replace: true })
+      return
+    }
+    navigate(location.state?.from || target, { replace: true })
   }
 
   const openRole = (nextRole) => {
@@ -160,12 +167,33 @@ export default function Login() {
       setError(created.error || 'Não foi possível criar o banco.')
       return true
     }
-    resetAppearance()
-    if (sampleEnabled) toggleSampleData()
-    localStorage.setItem('sampleDataEnabled', 'false')
+    if (created.created) {
+      resetAppearance()
+      if (sampleEnabled) toggleSampleData()
+      localStorage.setItem('sampleDataEnabled', 'false')
+    }
     loginAdminAfterCreate(created.tenant, result.email, result.name, result.authMeta || pendingAuthMeta || {})
+    if (created.tenant?.setupCompleted) {
+      afterLogin('/dashboard')
+      return true
+    }
     setPhase('onboarding')
     return true
+  }
+
+  const handleLocalOnly = async () => {
+    setError('')
+    setAccessDenied(null)
+    setLoading(true)
+    try {
+      const result = await loginLocalOnly(role)
+      setPendingAuthMeta(result.authMeta || null)
+      handleAuthResult(result)
+    } catch {
+      showAuthError('Não foi possível entrar sem senha.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleAuthResult = (result) => {
@@ -350,6 +378,21 @@ export default function Login() {
                 fullWidth
                 variant="outlined"
                 className="access-role-btn"
+                startIcon={<LockOpenOutlinedIcon />}
+                onClick={handleLocalOnly}
+                disabled={loading}
+                sx={{ mb: 1.25 }}
+              >
+                {loading ? <CircularProgress size={22} /> : 'Entrar sem senha'}
+              </Button>
+              <Typography className="access-sub" sx={{ mt: -0.5, mb: 1.25 }}>
+                Sem login online — dados só neste aparelho.
+              </Typography>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                className="access-role-btn"
                 startIcon={<EmailIcon />}
                 onClick={() => openMethod('password')}
                 sx={{ mb: 1.25 }}
@@ -407,6 +450,20 @@ export default function Login() {
               >
                 {loading ? <CircularProgress size={22} /> : (<><GoogleIcon /> Entrar com Google</>)}
               </Button>
+              <Button
+                fullWidth
+                variant="outlined"
+                className="access-role-btn"
+                startIcon={<LockOpenOutlinedIcon />}
+                onClick={handleLocalOnly}
+                disabled={loading}
+                sx={{ mt: 1.25 }}
+              >
+                Entrar sem senha
+              </Button>
+              <Typography className="access-sub" sx={{ mt: 1 }}>
+                Dados ficam apenas neste aparelho (sem nuvem).
+              </Typography>
             </Box>
           )}
 

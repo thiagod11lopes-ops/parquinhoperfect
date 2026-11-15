@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Box, Typography, Stack, TextField, Button, IconButton, Collapse, Alert, Chip,
 } from '@mui/material'
@@ -13,6 +13,8 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
 import { useSampleData } from '../../context/SampleDataContext'
+import { useParkSettings, DEFAULT_MAX_CHILDREN } from '../../context/ParkSettingsContext'
+import { loadUnitMaxChildren } from '../../utils/unitCapacity'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import UnitsBalanceCard from './UnitsBalanceCard'
 import '../../styles/global.scss'
@@ -26,16 +28,25 @@ const STATUS_LABEL = {
 function UnitCard({
   unit, managers, expanded, onToggle, onRename, onDelete,
   onInviteManager, onResend, onRevoke, onChangeEmail,
-  onEnter, isCurrent,
+  onEnter, isCurrent, tenantId, onSaveCapacity,
 }) {
   const [managerEmail, setManagerEmail] = useState('')
   const [managerName, setManagerName] = useState('')
   const [unitName, setUnitName] = useState(unit.name)
+  const [maxChildrenDraft, setMaxChildrenDraft] = useState(
+    () => String(loadUnitMaxChildren(tenantId, unit.id)),
+  )
   const [editEmailId, setEditEmailId] = useState(null)
   const [editEmailValue, setEditEmailValue] = useState('')
   const [msg, setMsg] = useState(null)
   const [addingManager, setAddingManager] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  useEffect(() => {
+    if (expanded) {
+      setMaxChildrenDraft(String(loadUnitMaxChildren(tenantId, unit.id)))
+    }
+  }, [expanded, tenantId, unit.id])
 
   const closeAddManager = () => {
     setAddingManager(false)
@@ -64,20 +75,53 @@ function UnitCard({
   }
 
   return (
-    <Box className={`unidade-card panel-card ${expanded ? 'is-open' : ''}`}>
-      <button type="button" className="unidade-toggle" onClick={onToggle} aria-expanded={expanded}>
-        <Box className="unidade-toggle-copy">
+    <Box className={`unidade-card panel-card ${expanded ? 'is-open' : ''} ${isCurrent ? 'is-current' : ''}`}>
+      {isCurrent && <span className="unidade-card-aura" aria-hidden />}
+      <Box className="unidade-card-head">
+        <button type="button" className="unidade-toggle" onClick={onToggle} aria-expanded={expanded}>
           <Typography className="unidade-name">{unit.name}</Typography>
-          <Typography className="unidade-meta">{managers.length} gerente(s)</Typography>
+          <ExpandMoreIcon className={`unidade-chevron ${expanded ? 'is-open' : ''}`} />
+        </button>
+        <Box className="unidade-meta-row">
+          <Box className="unidade-meta-left">
+            {isCurrent && (
+              <span className="unidade-in-use-badge">Unidade em uso</span>
+            )}
+            <Typography className="unidade-meta">
+              {managers.length} gerente(s)
+            </Typography>
+          </Box>
+          {!isCurrent && (
+            <Button
+              type="button"
+              className="btn-orange-card unidade-use-btn"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onEnter?.(unit.id, unit.name)
+              }}
+            >
+              Usar essa unidade
+            </Button>
+          )}
         </Box>
-        <ExpandMoreIcon className={`unidade-chevron ${expanded ? 'is-open' : ''}`} />
-      </button>
+      </Box>
 
       <Collapse in={expanded} timeout="auto" unmountOnExit>
         <Box className="unidade-body">
           {msg && (
             <Alert severity={msg.ok ? 'success' : 'error'} sx={{ mb: 1.25, borderRadius: 2 }}>
               {msg.text}
+            </Alert>
+          )}
+
+          {isCurrent && (
+            <Alert
+              severity="info"
+              className="unidade-current-alert"
+              sx={{ mb: 1.5, borderRadius: 2 }}
+            >
+              Você está nesta unidade agora.
             </Alert>
           )}
 
@@ -90,20 +134,34 @@ function UnitCard({
             }}>Salvar</Button>
           </Stack>
 
-          {isCurrent ? (
-            <Alert severity="info" sx={{ mb: 1.5, borderRadius: 2 }}>
-              Você está nesta unidade agora.
-            </Alert>
-          ) : (
-            <Button
+          <Typography className="unidade-section-label">Lotação máxima</Typography>
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+            <TextField
+              size="small"
               fullWidth
+              type="number"
+              label="Máximo de crianças"
+              value={maxChildrenDraft}
+              onChange={(e) => setMaxChildrenDraft(e.target.value)}
+              inputProps={{ min: 1, max: 200, step: 1 }}
+              className="unidade-field"
+            />
+            <Button
               className="btn-orange-card"
-              sx={{ mb: 1.5 }}
-              onClick={() => onEnter?.(unit.id, unit.name)}
+              onClick={() => {
+                const n = Number(maxChildrenDraft)
+                if (!Number.isFinite(n) || n < 1) {
+                  setMsg({ ok: false, text: 'Informe um número válido (mínimo 1).' })
+                  return
+                }
+                const saved = onSaveCapacity?.(unit.id, n)
+                setMaxChildrenDraft(String(saved ?? n))
+                setMsg({ ok: true, text: 'Lotação atualizada.' })
+              }}
             >
-              Usar esta unidade
+              Salvar
             </Button>
-          )}
+          </Stack>
 
           <Typography className="unidade-section-label">Gerentes</Typography>
           <Stack spacing={0.75} sx={{ mb: 1.25 }}>
@@ -223,9 +281,11 @@ export default function Unidades() {
     inviteMember, resendInvite, revokeMember, changeMemberEmail,
   } = useTenant()
   const { childrenList } = useSampleData()
+  const { setMaxChildrenForUnit } = useParkSettings()
 
   const tenant = getTenant(tenantId)
   const [newName, setNewName] = useState('')
+  const [newMaxChildren, setNewMaxChildren] = useState(String(DEFAULT_MAX_CHILDREN))
   const [openId, setOpenId] = useState(null)
   const [createMsg, setCreateMsg] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -240,6 +300,16 @@ export default function Unidades() {
     return map
   }, [tenant])
 
+  const sortedUnits = useMemo(() => {
+    const list = [...(tenant?.units || [])]
+    if (!unitId) return list
+    return list.sort((a, b) => {
+      if (a.id === unitId) return -1
+      if (b.id === unitId) return 1
+      return 0
+    })
+  }, [tenant?.units, unitId])
+
   if (!isAdmin) return <Navigate to="/dashboard" replace />
   if (!tenant) {
     return (
@@ -250,12 +320,19 @@ export default function Unidades() {
   }
 
   const handleCreate = () => {
+    const maxRaw = Number(newMaxChildren)
+    if (!Number.isFinite(maxRaw) || maxRaw < 1) {
+      setCreateMsg({ ok: false, text: 'Informe a lotação máxima (mínimo 1).' })
+      return
+    }
     const result = createUnit(tenantId, newName)
     if (!result.success) {
       setCreateMsg({ ok: false, text: result.error })
       return
     }
+    setMaxChildrenForUnit(result.unit.id, maxRaw)
     setNewName('')
+    setNewMaxChildren(String(DEFAULT_MAX_CHILDREN))
     setOpenId(result.unit.id)
     setCreateOpen(false)
     setCreateMsg({ ok: true, text: 'Unidade criada. Vincule os e-mails dos gerentes.' })
@@ -264,6 +341,7 @@ export default function Unidades() {
   const closeCreate = () => {
     setCreateOpen(false)
     setNewName('')
+    setNewMaxChildren(String(DEFAULT_MAX_CHILDREN))
     setCreateMsg(null)
   }
 
@@ -297,7 +375,7 @@ export default function Unidades() {
             {createMsg && (
               <Alert severity={createMsg.ok ? 'success' : 'error'} sx={{ mb: 1.25, borderRadius: 2 }}>{createMsg.text}</Alert>
             )}
-            <Stack direction="row" spacing={1}>
+            <Stack spacing={1}>
               <TextField
                 size="small"
                 fullWidth
@@ -310,7 +388,19 @@ export default function Unidades() {
                   if (e.key === 'Enter') handleCreate()
                 }}
               />
-              <Button className="btn-orange-card" startIcon={<AddIcon />} onClick={handleCreate}>Criar</Button>
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="number"
+                  label="Lotação máxima"
+                  value={newMaxChildren}
+                  onChange={(e) => setNewMaxChildren(e.target.value)}
+                  inputProps={{ min: 1, max: 200, step: 1 }}
+                  className="unidade-field"
+                />
+                <Button className="btn-orange-card" startIcon={<AddIcon />} onClick={handleCreate}>Criar</Button>
+              </Stack>
             </Stack>
           </Box>
         )}
@@ -322,15 +412,16 @@ export default function Unidades() {
         </Alert>
       )}
 
-      <Stack spacing={1.25} sx={{ mt: 2 }}>
-        {(tenant.units || []).length === 0 ? (
+      <Stack spacing={0.85} sx={{ mt: 1.5 }}>
+        {sortedUnits.length === 0 ? (
           <Box className="panel-card" sx={{ p: 2, textAlign: 'center' }}>
             <Typography>Nenhuma unidade cadastrada.</Typography>
           </Box>
-        ) : tenant.units.map((unit) => (
+        ) : sortedUnits.map((unit) => (
           <UnitCard
             key={unit.id}
             unit={unit}
+            tenantId={tenantId}
             managers={managersByUnit[unit.id] || []}
             expanded={openId === unit.id}
             onToggle={() => setOpenId((id) => (id === unit.id ? null : unit.id))}
@@ -344,8 +435,13 @@ export default function Unidades() {
               if (result.success && unitId === id) clearActiveUnit()
               return result
             }}
-            onEnter={(id, name) => selectActiveUnit(id, name)}
-            isCurrent={unitId === unit.id}
+            onEnter={(id, name) => {
+              const result = selectActiveUnit(id, name)
+              if (result?.success) setOpenId(null)
+              return result
+            }}
+            isCurrent={String(unitId || '') === String(unit.id || '')}
+            onSaveCapacity={(id, value) => setMaxChildrenForUnit(id, value)}
             onInviteManager={(id, data) => inviteMember({
               tenantId,
               unitId: id,
@@ -362,10 +458,10 @@ export default function Unidades() {
         ))}
       </Stack>
 
-      {(tenant.units || []).length > 0 && (
+      {sortedUnits.length > 0 && (
         <Box sx={{ mt: 2 }}>
           <UnitsBalanceCard
-            units={tenant.units}
+            units={sortedUnits}
             childrenList={childrenList}
             tenantId={tenantId}
             activeUnitId={unitId}

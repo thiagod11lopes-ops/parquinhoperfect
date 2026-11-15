@@ -31,7 +31,7 @@ body {
 #phone-app-root {
   height: 100%;
   font-weight: 700;
-  font-family: var(--app-font, 'Comic Sans MS', 'Comic Sans', cursive);
+  font-family: var(--app-font, 'Comfortaa', cursive);
 }
 
 #phone-app-root,
@@ -48,7 +48,7 @@ body {
   .MuiSvgIcon-root,
   p, span, label, a, li, td, th, button, h1, h2, h3, h4, h5, h6 {
     font-weight: 700 !important;
-    font-family: var(--app-font, 'Comic Sans MS', 'Comic Sans', cursive) !important;
+    font-family: var(--app-font, 'Comfortaa', cursive) !important;
     color: var(--app-font-color, #fff) !important;
     -webkit-text-fill-color: var(--app-font-color, #fff);
     text-shadow: var(--app-font-shadow-stack, 0 1px 2px #000, 0 0 4px #000, 1px 1px 0 #000) !important;

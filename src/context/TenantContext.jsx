@@ -4,12 +4,16 @@ import React, {
 import { syncedStorage } from '../firebase/syncedStorage'
 import { normalizePhoneBr } from '../firebase/authMethods'
 import { createTrialSubscription, normalizeSubscription } from '../billing/plans'
+import { sampleManagersData, sampleUnitsData } from '../data/mockData'
+import { saveUnitMaxChildren } from '../utils/unitCapacity'
+import { isSaasOwnerEmail } from '../saas/owner'
 
 const TenantContext = createContext(null)
 
 const INDEX_KEY = 'parquinhoTenantIndex'
 const PHONE_INDEX_KEY = 'parquinhoPhoneIndex'
 const tenantKey = (id) => `parquinhoTenant:${id}`
+const unitsSampleBackupKey = (tenantId) => `parquinhoUnitsBackupBeforeSample:${tenantId || 'tenant'}`
 
 export function normalizeEmail(email = '') {
   return String(email).trim().toLowerCase()
@@ -242,9 +246,27 @@ export function TenantProvider({ children }) {
 
   const getTenant = useCallback((tenantId) => loadTenant(tenantId), [tick]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const listAllTenants = useCallback(() => {
+    const index = loadIndex()
+    const seen = new Set()
+    const out = []
+    Object.values(index).forEach((entry) => {
+      if (!entry?.tenantId || entry.role !== 'administrador') return
+      if (seen.has(entry.tenantId)) return
+      seen.add(entry.tenantId)
+      const tenant = loadTenant(entry.tenantId)
+      if (tenant) out.push(tenant)
+    })
+    out.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    return out
+  }, [tick]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const createAdminTenant = useCallback((email, name) => {
     const mail = normalizeEmail(email)
     if (!isValidEmail(mail)) return { success: false, error: 'Informe um e-mail válido.' }
+    if (isSaasOwnerEmail(mail)) {
+      return { success: false, error: 'Este e-mail é reservado ao console SaaS.' }
+    }
 
     const index = loadIndex()
     if (index[mail]) {
@@ -264,7 +286,7 @@ export function TenantProvider({ children }) {
       units: [],
       members: [],
       setupCompleted: false,
-      subscription: createTrialSubscription('starter'),
+      subscription: createTrialSubscription('free'),
     }
     persistTenant(tenant)
     index[mail] = { tenantId: tenant.id, role: 'administrador' }
@@ -506,6 +528,107 @@ export function TenantProvider({ children }) {
     return { success: true, unit }
   }, [bump])
 
+  /** Ativa 7 unidades + gerentes de exemplo (faz backup do que existia). */
+  const seedSampleUnits = useCallback((tenantId) => {
+    const tenant = loadTenant(tenantId)
+    if (!tenant) return { success: false, error: 'Banco não encontrado.', units: [] }
+    const backupKey = unitsSampleBackupKey(tenantId)
+    const alreadySample = (tenant.units || []).some((u) => String(u.id || '').startsWith('sample-unit-'))
+    if (!syncedStorage.getItem(backupKey)) {
+      syncedStorage.setItem(backupKey, JSON.stringify({
+        units: tenant.units || [],
+        members: tenant.members || [],
+      }))
+    }
+
+    const units = sampleUnitsData.map((u) => ({ ...u }))
+    const now = new Date().toISOString()
+    const sampleMembers = sampleManagersData.map((mgr) => ({
+      id: mgr.id,
+      email: normalizeEmail(mgr.email),
+      name: mgr.name,
+      role: 'gerente',
+      unitId: mgr.unitId,
+      status: 'active',
+      invitedByEmail: tenant.adminEmail || '',
+      invitedByRole: 'administrador',
+      phone: '',
+      childName: '',
+      childAge: null,
+      childPlan: '',
+      childAllergies: '',
+      createdAt: now,
+      activatedAt: now,
+      isSample: true,
+    }))
+
+    // Se já está em modo exemplo, evita regravar/bump desnecessário.
+    if (alreadySample && (tenant.units || []).length === units.length) {
+      const currentIds = new Set((tenant.units || []).map((u) => u.id))
+      const sameIds = units.every((u) => currentIds.has(u.id))
+      if (sameIds) return { success: true, units: tenant.units, members: tenant.members }
+    }
+
+    persistTenant({ ...tenant, units, members: sampleMembers })
+
+    const index = loadIndex()
+    Object.keys(index).forEach((mail) => {
+      if (index[mail]?.tenantId === tenantId && String(index[mail]?.memberId || '').startsWith('sample-mgr-')) {
+        delete index[mail]
+      }
+    })
+    sampleMembers.forEach((m) => {
+      index[m.email] = { tenantId, role: m.role, memberId: m.id }
+    })
+    persistIndex(index)
+
+    units.forEach((u, indexNum) => {
+      saveUnitMaxChildren(tenantId, u.id, 20 + indexNum * 2)
+    })
+    bump()
+    return { success: true, units, members: sampleMembers }
+  }, [bump])
+
+  /** Restaura unidades e membros após desligar o modo exemplo. */
+  const restoreUnitsAfterSample = useCallback((tenantId) => {
+    const tenant = loadTenant(tenantId)
+    if (!tenant) return { success: false, error: 'Banco não encontrado.' }
+    const backupKey = unitsSampleBackupKey(tenantId)
+    let units = []
+    let members = []
+    try {
+      const raw = syncedStorage.getItem(backupKey)
+      const parsed = raw ? JSON.parse(raw) : null
+      if (Array.isArray(parsed)) {
+        // backup legado: só units
+        units = parsed
+        members = (tenant.members || []).filter((m) => !m.isSample && !String(m.id || '').startsWith('sample-mgr-'))
+      } else if (parsed && typeof parsed === 'object') {
+        units = Array.isArray(parsed.units) ? parsed.units : []
+        members = Array.isArray(parsed.members) ? parsed.members : []
+      }
+    } catch {
+      units = []
+      members = []
+    }
+    syncedStorage.removeItem(backupKey)
+    persistTenant({ ...tenant, units, members })
+
+    const index = loadIndex()
+    Object.keys(index).forEach((mail) => {
+      if (index[mail]?.tenantId === tenantId) delete index[mail]
+    })
+    index[normalizeEmail(tenant.adminEmail)] = { tenantId, role: 'administrador' }
+    members.forEach((m) => {
+      if (m.status === 'revoked') return
+      index[normalizeEmail(m.email)] = { tenantId, role: m.role, memberId: m.id }
+    })
+    persistIndex(index)
+
+    bump()
+    return { success: true, units, members }
+  }, [bump])
+
   const completeSetup = useCallback((tenantId) => {
     const tenant = loadTenant(tenantId)
     if (!tenant) return { success: false, error: 'Banco não encontrado.' }
@@ -594,6 +717,85 @@ export function TenantProvider({ children }) {
     }
   }, [])
 
+  /** Apaga o banco do administrador logado e todos os dados locais desse tenant. */
+  const deleteTenantCompletely = useCallback((tenantId) => {
+    const id = String(tenantId || '').trim()
+    if (!id) return { success: false, error: 'Banco não encontrado.' }
+
+    const tenant = loadTenant(id)
+    if (!tenant) return { success: false, error: 'Banco não encontrado.' }
+
+    const index = loadIndex()
+    Object.keys(index).forEach((mail) => {
+      if (index[mail]?.tenantId === id) delete index[mail]
+    })
+    persistIndex(index)
+
+    const phoneIndex = loadPhoneIndex()
+    Object.keys(phoneIndex).forEach((phone) => {
+      if (phoneIndex[phone]?.tenantId === id) delete phoneIndex[phone]
+    })
+    persistPhoneIndex(phoneIndex)
+
+    syncedStorage.removeItem(tenantKey(id))
+
+    const scopedPrefixes = [
+      `parquinhoPresence:${id}:`,
+      `parquinhoChildren:${id}:`,
+      `parquinhoStaff:${id}:`,
+      `parquinhoActivities:${id}:`,
+      `parquinhoSchedule:${id}:`,
+      `parquinhoAttendance:${id}:`,
+      `parquinhoMaxChildren:${id}:`,
+      `parquinhoParkInfo:${id}:`,
+      `parquinhoOccupancyHistory:${id}`,
+    ]
+    const toDelete = []
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i)
+      if (!key) continue
+      if (scopedPrefixes.some((prefix) => key === prefix || key.startsWith(prefix))) {
+        toDelete.push(key)
+      }
+    }
+    toDelete.forEach((key) => {
+      try {
+        syncedStorage.removeItem(key)
+      } catch {
+        // ignore
+      }
+    })
+
+    const filterJsonArray = (storageKey, predicate) => {
+      try {
+        const raw = syncedStorage.getItem(storageKey)
+        if (!raw) return
+        const parsed = JSON.parse(raw)
+        if (!Array.isArray(parsed)) return
+        const next = parsed.filter(predicate)
+        if (next.length === parsed.length) return
+        if (next.length) syncedStorage.setItem(storageKey, JSON.stringify(next))
+        else syncedStorage.removeItem(storageKey)
+      } catch {
+        // ignore
+      }
+    }
+
+    filterJsonArray('parquinhoChats', (item) => item?.tenantId !== id)
+    filterJsonArray('parquinhoAppNotifications', (item) => item?.tenantId !== id)
+    filterJsonArray('parquinhoStaffNotifications', (item) => item?.tenantId !== id)
+    filterJsonArray('parquinhoRatings', (item) => !item?.tenantId || item.tenantId !== id)
+
+    window.dispatchEvent(new CustomEvent('parquinho-tenant'))
+    window.dispatchEvent(new CustomEvent('parquinho-presence'))
+    window.dispatchEvent(new CustomEvent('parquinho-chats'))
+    window.dispatchEvent(new CustomEvent('parquinho-sample-data'))
+    window.dispatchEvent(new CustomEvent('parquinho-park-settings'))
+
+    bump()
+    return { success: true }
+  }, [bump])
+
   const importTenant = useCallback((tenantId, payload) => {
     try {
       const data = typeof payload === 'string' ? JSON.parse(payload) : payload
@@ -634,6 +836,7 @@ export function TenantProvider({ children }) {
   const value = useMemo(() => ({
     tick,
     getTenant,
+    listAllTenants,
     createAdminTenant,
     inviteMember,
     resendInvite,
@@ -644,20 +847,25 @@ export function TenantProvider({ children }) {
     createUnit,
     renameUnit,
     deleteUnit,
+    seedSampleUnits,
+    restoreUnitsAfterSample,
     completeSetup,
     updateSubscription,
     activatePaidPlan,
     exportTenant,
     importTenant,
+    deleteTenantCompletely,
     resolveEmailAccess,
     resolvePhoneAccess,
     normalizeEmail,
     normalizePhone,
     isValidEmail,
   }), [
-    tick, getTenant, createAdminTenant, inviteMember, resendInvite, revokeMember,
+    tick, getTenant, listAllTenants, createAdminTenant, inviteMember, resendInvite, revokeMember,
     changeMemberEmail, updateMember, activateInvite, createUnit, renameUnit, deleteUnit,
+    seedSampleUnits, restoreUnitsAfterSample,
     completeSetup, updateSubscription, activatePaidPlan, exportTenant, importTenant,
+    deleteTenantCompletely,
   ])
 
   return (

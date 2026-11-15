@@ -1,12 +1,10 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   Box, Typography, Stack, Button, TextField, Collapse, Alert, Slider,
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import PaletteIcon from '@mui/icons-material/Palette'
 import ImageIcon from '@mui/icons-material/Image'
-import FontDownloadIcon from '@mui/icons-material/FontDownload'
-import FormatColorTextIcon from '@mui/icons-material/FormatColorText'
 import ColorLensIcon from '@mui/icons-material/ColorLens'
 import WallpaperIcon from '@mui/icons-material/Wallpaper'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
@@ -17,11 +15,19 @@ import SwapVertIcon from '@mui/icons-material/SwapVert'
 import OpenInFullIcon from '@mui/icons-material/OpenInFull'
 import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen'
 import BackupIcon from '@mui/icons-material/Backup'
-import { Navigate } from 'react-router-dom'
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
+import GroupsIcon from '@mui/icons-material/Groups'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
 import { useAppearance, hexToPanel, panelToHex } from '../../context/AppearanceContext'
+import { useParkSettings, DEFAULT_MAX_CHILDREN } from '../../context/ParkSettingsContext'
+import {
+  loadUnitMaxChildren,
+  saveUnitMaxChildren,
+} from '../../utils/unitCapacity'
 import { sampleImageFillColor } from '../../utils/sampleImageColor'
+import { setLocalOnlyMode } from '../../firebase/syncedStorage'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import '../../styles/global.scss'
 
@@ -44,23 +50,66 @@ function readFileAsDataUrl(file) {
 }
 
 export default function Configuracao() {
-  const { isAdmin, user, tenantId } = useAuth()
-  const { getTenant, exportTenant, importTenant } = useTenant()
+  const navigate = useNavigate()
+  const { isAdmin, user, tenantId, unitId, logout } = useAuth()
+  const { getTenant, exportTenant, importTenant, deleteTenantCompletely } = useTenant()
   const {
     appearance, update, applyTheme, resetAppearance,
-    logoSrc, bgImageSrc, hasBgImage, themes, fonts,
+    logoSrc, hasBgImage, themes, backgrounds,
   } = useAppearance()
+  const { maxChildren, setMaxChildren, setMaxChildrenForUnit } = useParkSettings()
   const [open, setOpen] = useState(false)
-  const [fontsOpen, setFontsOpen] = useState(false)
   const [otherColorsOpen, setOtherColorsOpen] = useState(false)
   const [savedHint, setSavedHint] = useState('')
   const [expanding, setExpanding] = useState(false)
   const [backupMsg, setBackupMsg] = useState(null)
   const [confirmRemoveBg, setConfirmRemoveBg] = useState(false)
+  const [confirmWipe, setConfirmWipe] = useState(false)
+  const [wiping, setWiping] = useState(false)
+  /** choose = escolher fundo | frame = zoom/posição (só após escolher) */
+  const [bgStep, setBgStep] = useState('choose')
+  const [capacityDraft, setCapacityDraft] = useState(String(maxChildren || DEFAULT_MAX_CHILDREN))
+  const [capacityUnitId, setCapacityUnitId] = useState('')
+  const [capacityMsg, setCapacityMsg] = useState(null)
   const logoInputRef = useRef(null)
   const bgInputRef = useRef(null)
-  const activeFont = fonts.find((f) => f.id === appearance.fontId)
   const tenant = getTenant(tenantId)
+  const units = tenant?.units || []
+
+  useEffect(() => {
+    const preferred = unitId || units[0]?.id || ''
+    setCapacityUnitId((prev) => prev || preferred)
+  }, [unitId, units])
+
+  useEffect(() => {
+    if (!capacityUnitId) {
+      setCapacityDraft(String(DEFAULT_MAX_CHILDREN))
+      return
+    }
+    if (capacityUnitId === unitId) {
+      setCapacityDraft(String(maxChildren || DEFAULT_MAX_CHILDREN))
+      return
+    }
+    setCapacityDraft(String(loadUnitMaxChildren(tenantId, capacityUnitId)))
+  }, [capacityUnitId, maxChildren, tenantId, unitId])
+
+  const saveCapacity = () => {
+    const n = Number(capacityDraft)
+    if (!capacityUnitId) {
+      setCapacityMsg({ ok: false, text: 'Crie uma unidade antes de definir a lotação.' })
+      return
+    }
+    if (!Number.isFinite(n) || n < 1) {
+      setCapacityMsg({ ok: false, text: 'Informe um número válido (mínimo 1).' })
+      return
+    }
+    const saved = setMaxChildrenForUnit
+      ? setMaxChildrenForUnit(capacityUnitId, n)
+      : saveUnitMaxChildren(tenantId, capacityUnitId, n)
+    if (capacityUnitId === unitId) setMaxChildren(saved)
+    setCapacityDraft(String(saved))
+    setCapacityMsg({ ok: true, text: 'Lotação máxima atualizada.' })
+  }
 
   if (!isAdmin) return <Navigate to="/dashboard" replace />
 
@@ -95,6 +144,38 @@ export default function Configuracao() {
     e.target.value = ''
   }
 
+  const handleWipeAllData = async () => {
+    if (!tenantId || wiping) return
+    setWiping(true)
+    try {
+      const result = deleteTenantCompletely(tenantId)
+      if (!result.success) {
+        setBackupMsg({ ok: false, text: result.error || 'Não foi possível excluir os dados.' })
+        setConfirmWipe(false)
+        return
+      }
+      ;[
+        'parquinhoGuardianSession',
+        'parquinhoActiveCall',
+        'parquinhoPendingHandover',
+        'parquinhoChatReads',
+        'sampleDataEnabled',
+      ].forEach((key) => {
+        try { localStorage.removeItem(key) } catch { /* ignore */ }
+      })
+      resetAppearance()
+      setLocalOnlyMode(false)
+      await logout()
+      setConfirmWipe(false)
+      navigate('/', { replace: true })
+    } catch {
+      setBackupMsg({ ok: false, text: 'Falha ao excluir os dados deste login.' })
+      setConfirmWipe(false)
+    } finally {
+      setWiping(false)
+    }
+  }
+
   const flash = (text) => {
     setSavedHint(text)
     window.setTimeout(() => setSavedHint(''), 1600)
@@ -116,23 +197,42 @@ export default function Configuracao() {
     update({
       bgMode: 'image',
       bgImageCustom: dataUrl,
+      bgImagePreset: null,
       bgZoom: appearance.bgZoom ?? 100,
       bgPosX: appearance.bgPosX ?? 50,
       bgPosY: appearance.bgPosY ?? 50,
       themeId: 'custom',
     })
+    setBgStep('frame')
     flash('Imagem de fundo atualizada')
     e.target.value = ''
+  }
+
+  const selectBgPreset = (presetId) => {
+    update({
+      bgMode: 'image',
+      bgImagePreset: presetId,
+      bgImageCustom: null,
+      bgZoom: appearance.bgZoom ?? 100,
+      bgPosX: appearance.bgPosX ?? 50,
+      bgPosY: appearance.bgPosY ?? 50,
+      bgExpanded: false,
+      themeId: 'custom',
+    })
+    setBgStep('frame')
+    flash('Fundo aplicado')
   }
 
   const confirmRemoveBgImage = () => {
     update({
       bgImageCustom: null,
+      bgImagePreset: null,
       bgMode: 'color',
       bgExpanded: false,
       bgColorBeforeExpand: null,
       themeId: 'custom',
     })
+    setBgStep('choose')
     setConfirmRemoveBg(false)
     flash('Imagem de fundo removida')
   }
@@ -143,8 +243,11 @@ export default function Configuracao() {
   const bgOpacity = appearance.bgOpacity ?? 100
   const logoZoom = appearance.logoZoom ?? 100
   const logoOpacity = appearance.logoOpacity ?? 100
-
   const bgExpanded = Boolean(appearance.bgExpanded)
+
+  useEffect(() => {
+    if (!hasBgImage && bgStep === 'frame') setBgStep('choose')
+  }, [hasBgImage, bgStep])
 
   const onExpandFill = async () => {
     if (bgExpanded) {
@@ -301,253 +404,184 @@ export default function Configuracao() {
               <WallpaperIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'text-bottom' }} />
               Fundo do app
             </Typography>
-            <input ref={bgInputRef} type="file" accept="image/*" hidden onChange={onPickBg} />
-            <Stack
-              direction="row"
-              spacing={0.75}
-              sx={{ mb: 1.25, width: '100%' }}
-            >
-              {hasBgImage && (
-                <Button
-                  className="btn-orange-card"
-                  onClick={() => setConfirmRemoveBg(true)}
-                  sx={{ flex: 1, minWidth: 0 }}
-                >
-                  Retirar imagem
-                </Button>
-              )}
-              <Button
-                className="btn-orange-card"
-                onClick={() => bgInputRef.current?.click()}
-                sx={{ flex: 1, minWidth: 0, width: hasBgImage ? undefined : '100%' }}
-              >
-                {hasBgImage ? 'Trocar imagem' : 'Carregar imagem'}
-              </Button>
-            </Stack>
 
-            {hasBgImage && (
+            {bgStep === 'choose' && (
               <>
-                <Box className="config-bg-frame">
-                  <Typography className="config-bg-frame-label">Enquadrar fundo</Typography>
-                  <Typography className="config-bg-frame-hint">
-                    Prévia no formato do celular
-                  </Typography>
-                  <Box className="config-bg-phone" aria-hidden={false} aria-label="Prévia do fundo no celular">
-                    <Box className="config-bg-phone-notch" aria-hidden />
-                    <Box className="config-bg-phone-status" aria-hidden>
-                      <span>9:41</span>
-                      <span className="config-bg-phone-status-dots">
-                        <i /><i /><i />
-                      </span>
-                    </Box>
-                    <Box
-                      className="config-bg-preview"
-                      style={{
-                        backgroundColor: appearance.bgColor || '#f97316',
-                        backgroundImage: `url(${bgImageSrc})`,
-                        backgroundPosition: `${bgPosX}% ${bgPosY}%`,
-                        backgroundSize: `${bgZoom}%`,
-                        opacity: bgOpacity / 100,
-                      }}
-                    />
-                    <Box className="config-bg-phone-home" aria-hidden />
-                  </Box>
-
-                  <Box className="config-bg-slider">
-                    <Box className="config-bg-slider-head">
-                      <ZoomInIcon fontSize="small" />
-                      <Typography>Zoom</Typography>
-                      <span>{bgZoom}%</span>
-                    </Box>
-                    <Slider
-                      size="small"
-                      min={40}
-                      max={250}
-                      step={1}
-                      value={bgZoom}
-                      onChange={(_, value) => update({ bgZoom: value, bgMode: 'image', themeId: 'custom' })}
-                      aria-label="Zoom do fundo"
-                    />
-                  </Box>
-
-                  <Box className="config-bg-slider">
-                    <Box className="config-bg-slider-head">
-                      <OpacityIcon fontSize="small" />
-                      <Typography>Opacidade</Typography>
-                      <span>{bgOpacity}%</span>
-                    </Box>
-                    <Slider
-                      size="small"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={bgOpacity}
-                      onChange={(_, value) => update({ bgOpacity: value, themeId: 'custom' })}
-                      aria-label="Opacidade do fundo"
-                    />
-                  </Box>
-
-                  <Box className="config-bg-slider">
-                    <Box className="config-bg-slider-head">
-                      <SwapHorizIcon fontSize="small" />
-                      <Typography>Esquerda → Direita</Typography>
-                      <span>{bgPosX}%</span>
-                    </Box>
-                    <Slider
-                      size="small"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={bgPosX}
-                      onChange={(_, value) => update({ bgPosX: value, bgMode: 'image', themeId: 'custom' })}
-                      aria-label="Posição horizontal do fundo"
-                    />
-                  </Box>
-
-                  <Box className="config-bg-slider">
-                    <Box className="config-bg-slider-head">
-                      <SwapVertIcon fontSize="small" />
-                      <Typography>Cima → Baixo</Typography>
-                      <span>{bgPosY}%</span>
-                    </Box>
-                    <Slider
-                      size="small"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={bgPosY}
-                      onChange={(_, value) => update({ bgPosY: value, bgMode: 'image', themeId: 'custom' })}
-                      aria-label="Posição vertical do fundo"
-                    />
-                  </Box>
-
-                  <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
-                    <Button
-                      size="small"
-                      className={`config-chip-btn config-expand-btn ${bgExpanded ? 'is-active' : ''}`}
-                      startIcon={bgExpanded ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
-                      disabled={expanding}
-                      onClick={onExpandFill}
-                    >
-                      {expanding ? 'Expandindo…' : (bgExpanded ? 'Contrair' : 'Expandir')}
-                    </Button>
-                    <span
-                      className="config-bg-fill-swatch"
-                      style={{ backgroundColor: appearance.bgColor || '#f97316' }}
-                      title={`Cor de preenchimento ${appearance.bgColor || ''}`}
-                      aria-hidden
-                    />
-                    <Button
-                      size="small"
-                      className="config-chip-btn"
-                      onClick={() => update({
-                        bgZoom: 100,
-                        bgPosX: 50,
-                        bgPosY: 50,
-                        bgMode: 'image',
-                        themeId: 'custom',
-                      })}
-                    >
-                      Centralizar
-                    </Button>
-                  </Stack>
+                <Typography className="config-hint" sx={{ mb: 1 }}>
+                  Etapa 1 · Escolha um fundo pronto ou envie sua imagem
+                </Typography>
+                <Box className="config-bg-presets">
+                  {backgrounds.map((bg) => {
+                    const active = !appearance.bgImageCustom && appearance.bgImagePreset === bg.id
+                    return (
+                      <button
+                        key={bg.id}
+                        type="button"
+                        className={`config-bg-preset ${active ? 'is-active' : ''}`}
+                        onClick={() => selectBgPreset(bg.id)}
+                        aria-pressed={active}
+                        aria-label={bg.label}
+                      >
+                        <span
+                          className="config-bg-preset-thumb"
+                          style={{ backgroundImage: `url(${bg.src})` }}
+                        />
+                        <span className="config-bg-preset-name">{bg.label}</span>
+                      </button>
+                    )
+                  })}
                 </Box>
+                <input ref={bgInputRef} type="file" accept="image/*" hidden onChange={onPickBg} />
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  sx={{ mb: 1.25, width: '100%' }}
+                >
+                  {hasBgImage && (
+                    <Button
+                      className="btn-orange-card"
+                      onClick={() => setConfirmRemoveBg(true)}
+                      sx={{ flex: 1, minWidth: 0 }}
+                    >
+                      Retirar imagem
+                    </Button>
+                  )}
+                  <Button
+                    className="btn-orange-card"
+                    onClick={() => bgInputRef.current?.click()}
+                    sx={{ flex: 1, minWidth: 0, width: hasBgImage ? undefined : '100%' }}
+                  >
+                    {hasBgImage ? 'Trocar imagem' : 'Carregar imagem'}
+                  </Button>
+                </Stack>
+                {hasBgImage && (
+                  <Button
+                    fullWidth
+                    className="btn-orange-card"
+                    sx={{ mb: 1.25 }}
+                    onClick={() => setBgStep('frame')}
+                  >
+                    Continuar para enquadramento
+                  </Button>
+                )}
               </>
             )}
 
-            <Box className="config-font-section">
-              <button
-                type="button"
-                className={`config-font-toggle ${fontsOpen ? 'is-open' : ''}`}
-                onClick={() => setFontsOpen((v) => !v)}
-                aria-expanded={fontsOpen}
-              >
-                <Box className="config-font-toggle-copy">
-                  <FontDownloadIcon fontSize="small" />
-                  <Box>
-                    <Typography className="config-font-toggle-title">Fonte do sistema</Typography>
-                    {!fontsOpen && (
-                      <Typography className="config-font-toggle-sub" style={{ fontFamily: activeFont?.stack }}>
-                        {activeFont?.label || 'Fonte'}
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
-                <ExpandMoreIcon className="config-font-chevron" />
-              </button>
+            {bgStep === 'frame' && hasBgImage && (
+              <Box className="config-bg-frame">
+                <Typography className="config-bg-frame-label">Etapa 2 · Enquadrar fundo</Typography>
+                <Typography className="config-bg-frame-hint">
+                  Ajuste zoom e posição — a mudança aparece no app
+                </Typography>
+                <Button
+                  size="small"
+                  className="config-chip-btn"
+                  sx={{ mb: 1 }}
+                  onClick={() => setBgStep('choose')}
+                >
+                  Voltar à escolha de fundo
+                </Button>
 
-              <Collapse in={fontsOpen} timeout="auto" unmountOnExit>
-                <Box className="config-font-body">
-                  <Box className="config-font-preview" style={{ fontFamily: activeFont?.stack }}>
-                    <span className="config-font-preview-name">
-                      {activeFont?.label || 'Fonte'}
-                    </span>
-                    <span className="config-font-preview-sample">Aa Bb Cc · Parquinho</span>
+                <Box className="config-bg-slider">
+                  <Box className="config-bg-slider-head">
+                    <ZoomInIcon fontSize="small" />
+                    <Typography>Zoom</Typography>
+                    <span>{bgZoom}%</span>
                   </Box>
-                  <Box className="config-font-grid">
-                    {fonts.map((font) => (
-                      <button
-                        key={font.id}
-                        type="button"
-                        className={`config-font-card ${appearance.fontId === font.id ? 'is-active' : ''}`}
-                        style={{ fontFamily: font.stack }}
-                        onClick={() => {
-                          update({
-                            fontId: font.id,
-                            themeId: appearance.themeId === 'custom' ? 'custom' : appearance.themeId,
-                          })
-                          flash('Fonte atualizada')
-                        }}
-                      >
-                        <span className="config-font-card-sample">Aa</span>
-                        <span className="config-font-card-name">{font.label}</span>
-                      </button>
-                    ))}
-                  </Box>
+                  <Slider
+                    size="small"
+                    min={40}
+                    max={250}
+                    step={1}
+                    value={bgZoom}
+                    onChange={(_, value) => update({ bgZoom: value, bgMode: 'image', themeId: 'custom' })}
+                    aria-label="Zoom do fundo"
+                  />
                 </Box>
-              </Collapse>
-            </Box>
 
-            <Typography className="config-section-title">
-              <FormatColorTextIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'text-bottom' }} />
-              Cores das Fontes
-            </Typography>
-            <Box
-              className="config-font-color-preview"
-              style={{
-                color: appearance.fontColor || '#ffffff',
-                textShadow: `0 1px 2px ${appearance.fontShadowColor || '#000'}, 0 0 4px ${appearance.fontShadowColor || '#000'}, 1px 1px 0 ${appearance.fontShadowColor || '#000'}`,
-                fontFamily: activeFont?.stack,
-              }}
-            >
-              Aa Bb Cc · Prévia da fonte
-            </Box>
-            <Stack spacing={1.25} className="config-color-row" sx={{ mb: 1.5 }}>
-              <TextField
-                size="small"
-                label="Cor da fonte"
-                type="color"
-                value={appearance.fontColor || '#ffffff'}
-                onChange={(e) => update({
-                  fontColor: e.target.value,
-                  themeId: 'custom',
-                })}
-                className="config-field"
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                size="small"
-                label="Cor da sombra"
-                type="color"
-                value={appearance.fontShadowColor || '#000000'}
-                onChange={(e) => update({
-                  fontShadowColor: e.target.value,
-                  themeId: 'custom',
-                })}
-                className="config-field"
-                InputLabelProps={{ shrink: true }}
-              />
-            </Stack>
+                <Box className="config-bg-slider">
+                  <Box className="config-bg-slider-head">
+                    <OpacityIcon fontSize="small" />
+                    <Typography>Opacidade</Typography>
+                    <span>{bgOpacity}%</span>
+                  </Box>
+                  <Slider
+                    size="small"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={bgOpacity}
+                    onChange={(_, value) => update({ bgOpacity: value, themeId: 'custom' })}
+                    aria-label="Opacidade do fundo"
+                  />
+                </Box>
+
+                <Box className="config-bg-slider">
+                  <Box className="config-bg-slider-head">
+                    <SwapHorizIcon fontSize="small" />
+                    <Typography>Esquerda → Direita</Typography>
+                    <span>{bgPosX}%</span>
+                  </Box>
+                  <Slider
+                    size="small"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={bgPosX}
+                    onChange={(_, value) => update({ bgPosX: value, bgMode: 'image', themeId: 'custom' })}
+                    aria-label="Posição horizontal do fundo"
+                  />
+                </Box>
+
+                <Box className="config-bg-slider">
+                  <Box className="config-bg-slider-head">
+                    <SwapVertIcon fontSize="small" />
+                    <Typography>Cima → Baixo</Typography>
+                    <span>{bgPosY}%</span>
+                  </Box>
+                  <Slider
+                    size="small"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={bgPosY}
+                    onChange={(_, value) => update({ bgPosY: value, bgMode: 'image', themeId: 'custom' })}
+                    aria-label="Posição vertical do fundo"
+                  />
+                </Box>
+
+                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
+                  <Button
+                    size="small"
+                    className={`config-chip-btn config-expand-btn ${bgExpanded ? 'is-active' : ''}`}
+                    startIcon={bgExpanded ? <CloseFullscreenIcon /> : <OpenInFullIcon />}
+                    disabled={expanding}
+                    onClick={onExpandFill}
+                  >
+                    {expanding ? 'Expandindo…' : (bgExpanded ? 'Contrair' : 'Expandir')}
+                  </Button>
+                  <span
+                    className="config-bg-fill-swatch"
+                    style={{ backgroundColor: appearance.bgColor || '#f97316' }}
+                    title={`Cor de preenchimento ${appearance.bgColor || ''}`}
+                    aria-hidden
+                  />
+                  <Button
+                    size="small"
+                    className="config-chip-btn"
+                    onClick={() => update({
+                      bgZoom: 100,
+                      bgPosX: 50,
+                      bgPosY: 50,
+                      bgMode: 'image',
+                      themeId: 'custom',
+                    })}
+                  >
+                    Centralizar
+                  </Button>
+                </Stack>
+              </Box>
+            )}
 
             <Box className="config-font-section">
               <button
@@ -672,6 +706,61 @@ export default function Configuracao() {
       <Box className="config-card panel-card config-backup-card">
         <Box className="config-backup-head">
           <span className="config-card-icon" aria-hidden>
+            <GroupsIcon fontSize="small" />
+          </span>
+          <Box className="config-toggle-text">
+            <Typography className="config-toggle-title">Lotação máxima</Typography>
+            <Typography className="config-toggle-sub">
+              Limite de crianças por unidade
+            </Typography>
+          </Box>
+        </Box>
+        {capacityMsg && (
+          <Alert
+            severity={capacityMsg.ok ? 'success' : 'error'}
+            className="config-backup-alert"
+            onClose={() => setCapacityMsg(null)}
+          >
+            {capacityMsg.text}
+          </Alert>
+        )}
+        {units.length > 1 && (
+          <TextField
+            select
+            size="small"
+            fullWidth
+            label="Unidade"
+            value={capacityUnitId}
+            onChange={(e) => setCapacityUnitId(e.target.value)}
+            className="config-color-field"
+            SelectProps={{ native: true }}
+            sx={{ mb: 1.25 }}
+          >
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </TextField>
+        )}
+        <Stack direction="row" spacing={1} className="config-backup-actions">
+          <TextField
+            size="small"
+            fullWidth
+            type="number"
+            label="Máximo de crianças"
+            value={capacityDraft}
+            onChange={(e) => setCapacityDraft(e.target.value)}
+            inputProps={{ min: 1, max: 200, step: 1 }}
+            className="config-color-field"
+          />
+          <Button className="btn-orange-card" onClick={saveCapacity} sx={{ minWidth: 96 }}>
+            Salvar
+          </Button>
+        </Stack>
+      </Box>
+
+      <Box className="config-card panel-card config-backup-card">
+        <Box className="config-backup-head">
+          <span className="config-card-icon" aria-hidden>
             <BackupIcon fontSize="small" />
           </span>
           <Box className="config-toggle-text">
@@ -706,12 +795,44 @@ export default function Configuracao() {
         </Stack>
       </Box>
 
+      <Box className="config-card panel-card config-danger-card">
+        <Box className="config-backup-head">
+          <span className="config-card-icon config-card-icon--danger" aria-hidden>
+            <DeleteForeverIcon fontSize="small" />
+          </span>
+          <Box className="config-toggle-text">
+            <Typography className="config-toggle-title">Zona de perigo</Typography>
+            <Typography className="config-toggle-sub">
+              Exclui unidades, equipes, crianças e demais dados deste login
+              {tenant?.adminEmail ? ` (${tenant.adminEmail})` : ''}
+            </Typography>
+          </Box>
+        </Box>
+        <Button
+          fullWidth
+          className="config-wipe-btn"
+          startIcon={<DeleteForeverIcon />}
+          onClick={() => setConfirmWipe(true)}
+          disabled={wiping || !tenantId}
+        >
+          Excluir todos os dados
+        </Button>
+      </Box>
+
       <ConfirmDialog
         open={confirmRemoveBg}
         title="Retirar imagem?"
         message="A imagem de fundo será removida. Você poderá carregar outra depois."
         onConfirm={confirmRemoveBgImage}
         onCancel={() => setConfirmRemoveBg(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmWipe}
+        title="Excluir todos os dados?"
+        message={`Esta ação apaga permanentemente o banco deste administrador${tenant?.adminEmail ? ` (${tenant.adminEmail})` : ''}: unidades, gerentes, professores, responsáveis, crianças, presença, chats e aparência. Não dá para desfazer. Você será desconectado.`}
+        onConfirm={handleWipeAllData}
+        onCancel={() => !wiping && setConfirmWipe(false)}
       />
     </Box>
   )

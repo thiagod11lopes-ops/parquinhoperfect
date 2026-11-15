@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box, Typography, Button, TextField, Stack, Alert, Slider,
 } from '@mui/material'
@@ -6,8 +6,6 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded'
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
-import FontDownloadOutlinedIcon from '@mui/icons-material/FontDownloadOutlined'
-import FormatColorTextOutlinedIcon from '@mui/icons-material/FormatColorTextOutlined'
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
 import WallpaperOutlinedIcon from '@mui/icons-material/WallpaperOutlined'
 import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined'
@@ -20,6 +18,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
 import { useAppearance } from '../../context/AppearanceContext'
+import { useParkSettings, DEFAULT_MAX_CHILDREN } from '../../context/ParkSettingsContext'
 import { sampleImageFillColor } from '../../utils/sampleImageColor'
 import '../../styles/onboarding.scss'
 
@@ -35,10 +34,9 @@ function readFileAsDataUrl(file) {
 const STEPS = [
   { id: 'welcome', label: 'Olá' },
   { id: 'theme', label: 'Tema' },
-  { id: 'font', label: 'Fonte' },
-  { id: 'fontColors', label: 'Cores' },
   { id: 'logo', label: 'Logo' },
   { id: 'background', label: 'Fundo' },
+  { id: 'bgFrame', label: 'Enquadrar' },
   { id: 'unit', label: 'Unidade' },
   { id: 'manager', label: 'Gerente' },
   { id: 'done', label: 'Pronto' },
@@ -48,12 +46,14 @@ export default function AdminOnboarding({ onComplete }) {
   const navigate = useNavigate()
   const { user, tenantId, selectActiveUnit } = useAuth()
   const { getTenant, createUnit, inviteMember, completeSetup } = useTenant()
+  const { setMaxChildrenForUnit } = useParkSettings()
   const {
-    appearance, applyTheme, update, themes, fonts, logoSrc, bgImageSrc,
+    appearance, applyTheme, update, themes, logoSrc, backgrounds, hasBgImage,
   } = useAppearance()
 
   const [step, setStep] = useState(0)
   const [unitName, setUnitName] = useState('')
+  const [unitMaxChildren, setUnitMaxChildren] = useState(String(DEFAULT_MAX_CHILDREN))
   const [createdUnitId, setCreatedUnitId] = useState(null)
   const [managerName, setManagerName] = useState('')
   const [managerEmail, setManagerEmail] = useState('')
@@ -86,12 +86,24 @@ export default function AdminOnboarding({ onComplete }) {
       update({
         bgMode: 'image',
         bgImageCustom: dataUrl,
+        bgImagePreset: null,
         themeId: 'custom',
       })
     } catch {
       setError('Não foi possível carregar a imagem de fundo.')
     }
     e.target.value = ''
+  }
+
+  const selectBgPreset = (presetId) => {
+    setError('')
+    update({
+      bgMode: 'image',
+      bgImagePreset: presetId,
+      bgImageCustom: null,
+      bgExpanded: false,
+      themeId: 'custom',
+    })
   }
 
   const onExpandFill = async () => {
@@ -123,7 +135,6 @@ export default function AdminOnboarding({ onComplete }) {
       setExpanding(false)
     }
   }
-  const activeFont = fonts.find((f) => f.id === appearance.fontId) || fonts[0]
   const progress = ((step + 1) / STEPS.length) * 100
 
   const greeting = useMemo(() => {
@@ -138,8 +149,22 @@ export default function AdminOnboarding({ onComplete }) {
 
   const goBack = () => {
     setError('')
-    setStep((s) => Math.max(0, s - 1))
+    setStep((s) => {
+      const currentId = STEPS[s]?.id
+      if (currentId === 'unit' && !hasBgImage) {
+        const bgIndex = STEPS.findIndex((item) => item.id === 'background')
+        return bgIndex >= 0 ? bgIndex : Math.max(0, s - 1)
+      }
+      return Math.max(0, s - 1)
+    })
   }
+
+  useEffect(() => {
+    if (STEPS[step]?.id === 'bgFrame' && !hasBgImage) {
+      const unitIndex = STEPS.findIndex((item) => item.id === 'unit')
+      if (unitIndex >= 0) setStep(unitIndex)
+    }
+  }, [step, hasBgImage])
 
   const ensureUnit = () => {
     const trimmed = unitName.trim()
@@ -147,9 +172,17 @@ export default function AdminOnboarding({ onComplete }) {
       setError('Informe o nome da primeira unidade.')
       return null
     }
+    const maxRaw = Number(unitMaxChildren)
+    if (!Number.isFinite(maxRaw) || maxRaw < 1) {
+      setError('Informe a lotação máxima (mínimo 1 criança).')
+      return null
+    }
     if (createdUnitId) {
       const existing = tenant?.units?.find((u) => u.id === createdUnitId)
-      if (existing) return existing
+      if (existing) {
+        setMaxChildrenForUnit(existing.id, maxRaw)
+        return existing
+      }
     }
     const result = createUnit(tenantId, trimmed)
     if (!result.success) {
@@ -157,6 +190,7 @@ export default function AdminOnboarding({ onComplete }) {
       return null
     }
     setCreatedUnitId(result.unit.id)
+    setMaxChildrenForUnit(result.unit.id, maxRaw)
     return result.unit
   }
 
@@ -178,11 +212,20 @@ export default function AdminOnboarding({ onComplete }) {
     const id = STEPS[step].id
     setError('')
 
-    if (
-      id === 'welcome' || id === 'theme' || id === 'font' || id === 'fontColors'
-      || id === 'logo' || id === 'background'
-    ) {
+    if (id === 'welcome' || id === 'theme' || id === 'logo' || id === 'bgFrame') {
       goNext()
+      return
+    }
+
+    if (id === 'background') {
+      if (hasBgImage) {
+        goNext()
+        return
+      }
+      // Sem fundo: pula a etapa de enquadramento
+      const unitIndex = STEPS.findIndex((s) => s.id === 'unit')
+      if (unitIndex >= 0) setStep(unitIndex)
+      else goNext()
       return
     }
 
@@ -301,82 +344,6 @@ export default function AdminOnboarding({ onComplete }) {
             </Box>
           )}
 
-          {stepId === 'font' && (
-            <Box className="onboard-panel">
-              <Box className="onboard-kicker">
-                <FontDownloadOutlinedIcon fontSize="small" />
-                Aparência
-              </Box>
-              <Typography className="onboard-title">Fonte do sistema</Typography>
-              <Typography className="onboard-sub">
-                Toque para ver a tipografia aplicada em todo o app.
-              </Typography>
-              <Box
-                className="onboard-font-preview"
-                style={{ fontFamily: activeFont?.stack }}
-              >
-                Aa · Parquinho
-              </Box>
-              <Box className="onboard-font-grid">
-                {fonts.map((font) => (
-                  <button
-                    key={font.id}
-                    type="button"
-                    className={`onboard-font-card ${appearance.fontId === font.id ? 'is-active' : ''}`}
-                    style={{ fontFamily: font.stack }}
-                    onClick={() => update({ fontId: font.id, themeId: appearance.themeId === 'custom' ? 'custom' : appearance.themeId })}
-                  >
-                    <strong>Aa</strong>
-                    <span>{font.label}</span>
-                  </button>
-                ))}
-              </Box>
-            </Box>
-          )}
-
-          {stepId === 'fontColors' && (
-            <Box className="onboard-panel">
-              <Box className="onboard-kicker">
-                <FormatColorTextOutlinedIcon fontSize="small" />
-                Aparência
-              </Box>
-              <Typography className="onboard-title">Cores das fontes</Typography>
-              <Typography className="onboard-sub">
-                Ajuste texto e sombra para boa leitura sobre o fundo.
-              </Typography>
-              <Box
-                className="onboard-font-preview"
-                style={{
-                  fontFamily: activeFont?.stack,
-                  color: appearance.fontColor || '#fff',
-                  textShadow: `0 1px 2px ${appearance.fontShadowColor || '#0f172a'}, 0 0 4px ${appearance.fontShadowColor || '#0f172a'}`,
-                }}
-              >
-                Texto legível · Parquinho
-              </Box>
-              <Stack spacing={1.5} className="onboard-color-fields">
-                <TextField
-                  size="small"
-                  type="color"
-                  label="Cor da fonte"
-                  value={appearance.fontColor || '#ffffff'}
-                  onChange={(e) => update({ fontColor: e.target.value, themeId: 'custom' })}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  type="color"
-                  label="Cor da sombra"
-                  value={appearance.fontShadowColor || '#0f172a'}
-                  onChange={(e) => update({ fontShadowColor: e.target.value, themeId: 'custom' })}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
-                />
-              </Stack>
-            </Box>
-          )}
-
           {stepId === 'logo' && (
             <Box className="onboard-panel">
               <Box className="onboard-kicker">
@@ -465,16 +432,29 @@ export default function AdminOnboarding({ onComplete }) {
                 Aparência
               </Box>
               <Typography className="onboard-title">Imagem de fundo</Typography>
-              <Box
-                className="onboard-bg-preview"
-                style={{
-                  backgroundColor: appearance.bgColor || '#f97316',
-                  backgroundImage: `url(${bgImageSrc})`,
-                  backgroundPosition: `${appearance.bgPosX ?? 50}% ${appearance.bgPosY ?? 50}%`,
-                  backgroundSize: `${appearance.bgZoom ?? 100}%`,
-                  opacity: (appearance.bgOpacity ?? 100) / 100,
-                }}
-              />
+              <Typography className="onboard-sub">
+                Escolha um fundo pronto ou envie sua própria imagem. A prévia aparece no app.
+              </Typography>
+              <Box className="onboard-bg-presets">
+                {backgrounds.map((bg) => {
+                  const active = !appearance.bgImageCustom && appearance.bgImagePreset === bg.id
+                  return (
+                    <button
+                      key={bg.id}
+                      type="button"
+                      className={`onboard-bg-preset ${active ? 'is-active' : ''}`}
+                      onClick={() => selectBgPreset(bg.id)}
+                      aria-pressed={active}
+                    >
+                      <span
+                        className="onboard-bg-preset-thumb"
+                        style={{ backgroundImage: `url(${bg.src})` }}
+                      />
+                      <span className="onboard-bg-preset-name">{bg.label}</span>
+                    </button>
+                  )
+                })}
+              </Box>
               <input
                 ref={bgInputRef}
                 type="file"
@@ -492,18 +472,36 @@ export default function AdminOnboarding({ onComplete }) {
                     bgInputRef.current?.click()
                   }}
                 >
-                  Imagem
+                  Enviar imagem
                 </Button>
-                {appearance.bgImageCustom && (
+                {hasBgImage && (
                   <Button
                     size="small"
                     className="onboard-chip"
                     onClick={() => bgInputRef.current?.click()}
                   >
-                    Trocar imagem
+                    Trocar arquivo
                   </Button>
                 )}
               </Stack>
+              {hasBgImage && (
+                <Typography className="onboard-sub" sx={{ mt: 0.5 }}>
+                  Fundo escolhido. Em seguida você ajusta zoom e posição.
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {stepId === 'bgFrame' && (
+            <Box className="onboard-panel">
+              <Box className="onboard-kicker">
+                <WallpaperOutlinedIcon fontSize="small" />
+                Aparência
+              </Box>
+              <Typography className="onboard-title">Enquadrar fundo</Typography>
+              <Typography className="onboard-sub">
+                Ajuste zoom, opacidade e posição. A mudança aparece no app.
+              </Typography>
               <Box className="onboard-slider-block">
                 <Box className="onboard-slider-head">
                   <Typography>Zoom</Typography>
@@ -599,14 +597,26 @@ export default function AdminOnboarding({ onComplete }) {
               <Typography className="onboard-sub">
                 Ex.: Unidade Centro, Filial Sul… Você pode criar outras depois.
               </Typography>
-              <TextField
-                fullWidth
-                label="Nome da unidade"
-                value={unitName}
-                onChange={(e) => setUnitName(e.target.value)}
-                className="onboard-field"
-                autoFocus
-              />
+              <Stack spacing={1.25} sx={{ mt: 0.5 }}>
+                <TextField
+                  fullWidth
+                  label="Nome da unidade"
+                  value={unitName}
+                  onChange={(e) => setUnitName(e.target.value)}
+                  className="onboard-field"
+                  autoFocus
+                />
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Lotação máxima"
+                  value={unitMaxChildren}
+                  onChange={(e) => setUnitMaxChildren(e.target.value)}
+                  className="onboard-field"
+                  inputProps={{ min: 1, max: 200, step: 1 }}
+                  helperText="Quantidade máxima de crianças nesta unidade"
+                />
+              </Stack>
             </Box>
           )}
 
@@ -688,7 +698,7 @@ export default function AdminOnboarding({ onComplete }) {
             disabled={busy}
           >
             {stepId === 'welcome' && 'Começar'}
-            {(stepId === 'theme' || stepId === 'font' || stepId === 'fontColors' || stepId === 'logo' || stepId === 'background') && 'Continuar'}
+            {(stepId === 'theme' || stepId === 'logo' || stepId === 'background' || stepId === 'bgFrame') && 'Continuar'}
             {stepId === 'unit' && 'Salvar unidade'}
             {stepId === 'manager' && 'Continuar'}
             {stepId === 'done' && 'Entrar no sistema'}

@@ -23,6 +23,7 @@ import Configuracao from '../pages/Configuracao/Configuracao'
 import Relatorios from '../pages/Relatorios/Relatorios'
 import Presenca from '../pages/Presenca/Presenca'
 import Planos from '../pages/Planos/Planos'
+import SaasOwnerConsole from '../pages/SaasOwner/SaasOwnerConsole'
 import { useAuth } from '../context/AuthContext'
 
 function AuthRedirect() {
@@ -36,6 +37,16 @@ export default function AppRouter() {
       <Route path="/"        element={<Login />} />
       <Route path="/login"   element={<Navigate to="/" replace />} />
       <Route path="/signup"  element={<Signup />} />
+
+      {/* Console do vendedor SaaS — sistema separado do app da creche */}
+      <Route
+        path="/saas"
+        element={(
+          <ProtectedRoute>
+            <SaasOwnerConsole />
+          </ProtectedRoute>
+        )}
+      />
 
       <Route element={<Layout />}>
         <Route path="dashboard"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

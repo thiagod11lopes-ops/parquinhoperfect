@@ -12,6 +12,7 @@ import {
   formatPlanPrice,
   getPlanById,
   getSubscriptionAccess,
+  normalizePlanId,
 } from '../../billing/plans'
 import { confirmMercadoPagoReturn, startMercadoPagoCheckout } from '../../billing/mercadoPago'
 import '../../styles/global.scss'
@@ -29,7 +30,6 @@ export default function Planos() {
   const { getTenant, activatePaidPlan, updateSubscription } = useTenant()
   const [params] = useSearchParams()
   const [loadingPlan, setLoadingPlan] = useState(null)
-  const [selectedPlanId, setSelectedPlanId] = useState(null)
   const [message, setMessage] = useState(null)
   const [confirming, setConfirming] = useState(false)
 
@@ -42,15 +42,8 @@ export default function Planos() {
   const status = statusMeta(access.status)
 
   useEffect(() => {
-    const preferred = BILLING_PLANS.find((p) => p.highlight)?.id
-      || access.planId
-      || BILLING_PLANS[0]?.id
-    setSelectedPlanId(preferred)
-  }, [access.planId])
-
-  useEffect(() => {
     const payStatus = params.get('status')
-    const planId = params.get('plan')
+    const planId = normalizePlanId(params.get('plan'))
     const paymentId = params.get('payment_id') || params.get('collection_id')
     if (!payStatus || !tenantId) return undefined
 
@@ -81,15 +74,38 @@ export default function Planos() {
 
   if (!isAdmin) return <Navigate to="/dashboard" replace />
 
-  const selected = getPlanById(selectedPlanId) || BILLING_PLANS[0]
-  const isCurrentSelected = access.planId === selected?.id && access.ok
+  const handleActivateFree = (planId) => {
+    setMessage(null)
+    setLoadingPlan(planId)
+    try {
+      activatePaidPlan(tenantId, planId, {})
+      updateSubscription(tenantId, {
+        planId,
+        status: 'active',
+        provider: 'local',
+      })
+      setMessage({ ok: true, text: 'Plano Grátis ativado.' })
+    } catch {
+      setMessage({ ok: false, text: 'Não foi possível ativar o plano Grátis.' })
+    } finally {
+      setLoadingPlan(null)
+    }
+  }
 
   const handleCheckout = async (planId) => {
+    const plan = getPlanById(planId)
+    if (!plan) return
+
+    if (!plan.paid || plan.price <= 0) {
+      handleActivateFree(plan.id)
+      return
+    }
+
     setMessage(null)
     setLoadingPlan(planId)
     try {
       const result = await startMercadoPagoCheckout({
-        planId,
+        planId: plan.id,
         tenantId,
         adminEmail: user?.email || tenant?.adminEmail,
         adminName: user?.name || tenant?.adminName,
@@ -100,7 +116,7 @@ export default function Planos() {
       }
       if (result.preferenceId) {
         updateSubscription(tenantId, {
-          planId,
+          planId: plan.id,
           status: access.ok ? access.status : 'pending',
           mpPreferenceId: result.preferenceId,
         })
@@ -123,22 +139,24 @@ export default function Planos() {
       <Box className="planos-aurora planos-aurora--two" aria-hidden />
 
       <Box className="planos-hero">
-        <Typography className="planos-kicker">Parquinho · Admin</Typography>
-        <Typography className="planos-title">Seu plano</Typography>
-        <Typography className="planos-lead">
-          Só o administrador paga. A equipe e os responsáveis usam sem cobrança.
-        </Typography>
-      </Box>
-
-      <Box className={`planos-status planos-status--${status.tone}`}>
-        <Box className="planos-status-dot" aria-hidden />
-        <Box className="planos-status-copy">
-          <Typography className="planos-status-label">{status.label}</Typography>
-          <Typography className="planos-status-detail">
-            {access.ok
-              ? `${currentPlan?.name || 'Plano'} · até ${endsLabel}`
-              : 'Escolha um plano para liberar o painel completo'}
-          </Typography>
+        <Typography className="planos-title">Seus planos</Typography>
+        <Box className="planos-hero-row">
+          <Box className={`planos-status planos-status--${status.tone}`}>
+            <Box className="planos-status-dot" aria-hidden />
+            <Box className="planos-status-copy">
+              <Typography className="planos-status-label">{status.label}</Typography>
+              <Typography className="planos-status-detail">
+                {access.ok
+                  ? `${currentPlan?.name || 'Plano'} · até ${endsLabel}`
+                  : 'Escolha um plano para liberar o painel completo'}
+              </Typography>
+            </Box>
+          </Box>
+          <Box className="planos-lead-card">
+            <Typography className="planos-lead">
+              Os planos são sempre gratuitos para a equipe e os responsáveis cadastrados.
+            </Typography>
+          </Box>
         </Box>
       </Box>
 
@@ -155,72 +173,77 @@ export default function Planos() {
         </Box>
       )}
 
-      <Box className="planos-picker" role="listbox" aria-label="Planos disponíveis">
+      <Box className="planos-cards" role="list" aria-label="Planos disponíveis">
         {BILLING_PLANS.map((plan, index) => {
-          const active = selectedPlanId === plan.id
-          const current = access.planId === plan.id && access.ok
+          const current = normalizePlanId(access.planId) === plan.id && access.ok
+          const loading = loadingPlan === plan.id
           return (
-            <button
+            <Box
               key={plan.id}
-              type="button"
-              role="option"
-              aria-selected={active}
+              role="listitem"
               className={[
-                'planos-option',
-                active ? 'is-active' : '',
+                'planos-card',
                 plan.highlight ? 'is-featured' : '',
                 current ? 'is-current' : '',
               ].filter(Boolean).join(' ')}
-              style={{ animationDelay: `${0.05 + index * 0.06}s` }}
-              onClick={() => setSelectedPlanId(plan.id)}
+              style={{ animationDelay: `${0.04 + index * 0.05}s` }}
             >
-              <Box className="planos-option-top">
-                <Typography className="planos-option-name">{plan.name}</Typography>
-                {plan.highlight && <span className="planos-option-badge">Popular</span>}
-                {current && <span className="planos-option-badge is-soft">Atual</span>}
+              <Box className="planos-card-top">
+                <Typography className="planos-card-name">{plan.name}</Typography>
+                {plan.highlight && <span className="planos-card-badge">Popular</span>}
+                {current && <span className="planos-card-badge is-soft">Atual</span>}
               </Box>
-              <Typography className="planos-option-price">
-                {formatPlanPrice(plan)}
-                <span>/mês</span>
+
+              <Typography
+                className={`planos-card-price${plan.price <= 0 && plan.compareAtPrice ? ' is-free-strike' : ''}`}
+              >
+                {plan.price <= 0 && plan.compareAtPrice ? (
+                  <span className="planos-card-price-strike">{formatPlanPrice(plan)}</span>
+                ) : (
+                  formatPlanPrice(plan)
+                )}
+                {(plan.price > 0 || plan.compareAtPrice > 0) && (
+                  <span className="planos-card-price-period">/mês</span>
+                )}
               </Typography>
-            </button>
+
+              <Typography className="planos-card-desc">{plan.description}</Typography>
+
+              <Box className="planos-card-features">
+                {plan.features.map((feature) => (
+                  <Box key={feature} className="planos-card-feature">
+                    <span className="planos-card-feature-icon" aria-hidden>
+                      <CheckRoundedIcon />
+                    </span>
+                    <Typography>{feature}</Typography>
+                  </Box>
+                ))}
+              </Box>
+
+              <Button
+                fullWidth
+                disableElevation
+                className="planos-card-cta"
+                disabled={Boolean(loadingPlan) || current}
+                onClick={() => handleCheckout(plan.id)}
+                startIcon={!loading && !current ? <BoltRoundedIcon /> : null}
+              >
+                {loading
+                  ? <CircularProgress size={22} color="inherit" />
+                  : current
+                    ? 'Este já é o seu plano'
+                    : plan.paid
+                      ? `Assinar ${plan.name}`
+                      : `Usar ${plan.name}`}
+              </Button>
+            </Box>
           )
         })}
       </Box>
 
-      {selected && (
-        <Box className="planos-detail" key={selected.id}>
-          <Typography className="planos-detail-desc">{selected.description}</Typography>
-          <Box className="planos-features">
-            {selected.features.map((feature) => (
-              <Box key={feature} className="planos-feature">
-                <span className="planos-feature-icon" aria-hidden>
-                  <CheckRoundedIcon />
-                </span>
-                <Typography>{feature}</Typography>
-              </Box>
-            ))}
-          </Box>
-
-          <Button
-            fullWidth
-            disableElevation
-            className="planos-cta"
-            disabled={Boolean(loadingPlan) || isCurrentSelected}
-            onClick={() => handleCheckout(selected.id)}
-            startIcon={!loadingPlan && !isCurrentSelected ? <BoltRoundedIcon /> : null}
-          >
-            {loadingPlan === selected.id
-              ? <CircularProgress size={22} color="inherit" />
-              : isCurrentSelected
-                ? 'Este já é o seu plano'
-                : `Assinar ${selected.name}`}
-          </Button>
-          <Typography className="planos-cta-note">
-            Pagamento seguro via Mercado Pago
-          </Typography>
-        </Box>
-      )}
+      <Typography className="planos-cta-note">
+        Pagamentos dos planos pagos via Mercado Pago
+      </Typography>
     </Box>
   )
 }

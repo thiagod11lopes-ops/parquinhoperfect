@@ -1,3 +1,5 @@
+import { syncedStorage } from '../firebase/syncedStorage'
+
 const MAX_KEY = 'parquinhoMaxChildren'
 export const DEFAULT_UNIT_MAX = 20
 
@@ -5,21 +7,46 @@ export function unitMaxStorageKey(tenantId, unitId) {
   return `${MAX_KEY}:${tenantId || 'tenant'}:${unitId || 'global'}`
 }
 
+function clampMax(value) {
+  const n = Math.floor(Number(value))
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_UNIT_MAX
+  return Math.min(200, n)
+}
+
 /** Lotação máxima salva para a unidade (Informações / Painel). */
 export function loadUnitMaxChildren(tenantId, unitId) {
   try {
     const key = unitMaxStorageKey(tenantId, unitId)
-    let raw = localStorage.getItem(key)
+    let raw = syncedStorage.getItem(key)
     if (raw == null && unitId) {
-      raw = localStorage.getItem(MAX_KEY)
+      raw = syncedStorage.getItem(MAX_KEY)
+    }
+    if (raw == null) {
+      try {
+        raw = localStorage.getItem(key) ?? (unitId ? localStorage.getItem(MAX_KEY) : null)
+      } catch {
+        raw = null
+      }
     }
     if (raw == null) return DEFAULT_UNIT_MAX
-    const n = Number(raw)
-    if (!Number.isFinite(n) || n < 1) return DEFAULT_UNIT_MAX
-    return Math.min(200, Math.floor(n))
+    return clampMax(raw)
   } catch {
     return DEFAULT_UNIT_MAX
   }
+}
+
+/** Persiste lotação máxima da unidade e notifica o app. */
+export function saveUnitMaxChildren(tenantId, unitId, value) {
+  const n = clampMax(value)
+  const key = unitMaxStorageKey(tenantId, unitId)
+  syncedStorage.setItem(key, String(n))
+  try {
+    localStorage.setItem(key, String(n))
+  } catch {
+    // ignore
+  }
+  window.dispatchEvent(new CustomEvent('parquinho-park-settings'))
+  return n
 }
 
 /**
