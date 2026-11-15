@@ -14,12 +14,19 @@ import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined'
 import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded'
 import OpenInFullIcon from '@mui/icons-material/OpenInFull'
 import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen'
+import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
 import { useAppearance } from '../../context/AppearanceContext'
 import { useParkSettings, DEFAULT_MAX_CHILDREN } from '../../context/ParkSettingsContext'
 import { sampleImageFillColor } from '../../utils/sampleImageColor'
+import {
+  BILLING_PLANS,
+  createTrialSubscription,
+  formatPlanPrice,
+  getPlanById,
+} from '../../billing/plans'
 import '../../styles/onboarding.scss'
 
 function readFileAsDataUrl(file) {
@@ -39,13 +46,17 @@ const STEPS = [
   { id: 'bgFrame', label: 'Enquadrar' },
   { id: 'unit', label: 'Unidade' },
   { id: 'manager', label: 'Gerente' },
+  { id: 'plan', label: 'Plano' },
   { id: 'done', label: 'Pronto' },
 ]
 
 export default function AdminOnboarding({ onComplete }) {
   const navigate = useNavigate()
   const { user, tenantId, selectActiveUnit } = useAuth()
-  const { getTenant, createUnit, inviteMember, completeSetup } = useTenant()
+  const {
+    getTenant, createUnit, inviteMember, completeSetup,
+    updateSubscription, activatePaidPlan,
+  } = useTenant()
   const { setMaxChildrenForUnit } = useParkSettings()
   const {
     appearance, applyTheme, update, themes, logoSrc, backgrounds, hasBgImage,
@@ -57,6 +68,7 @@ export default function AdminOnboarding({ onComplete }) {
   const [createdUnitId, setCreatedUnitId] = useState(null)
   const [managerName, setManagerName] = useState('')
   const [managerEmail, setManagerEmail] = useState('')
+  const [selectedPlanId, setSelectedPlanId] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [expanding, setExpanding] = useState(false)
@@ -261,6 +273,36 @@ export default function AdminOnboarding({ onComplete }) {
             setError(invited.error || 'Não foi possível convidar o gerente.')
             return
           }
+        }
+        goNext()
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+
+    if (id === 'plan') {
+      if (!selectedPlanId) {
+        setError('Escolha um plano para continuar.')
+        return
+      }
+      const plan = getPlanById(selectedPlanId)
+      if (!plan) {
+        setError('Plano inválido. Selecione novamente.')
+        return
+      }
+      setBusy(true)
+      try {
+        if (!plan.paid || plan.price <= 0) {
+          activatePaidPlan(tenantId, plan.id, {})
+          updateSubscription(tenantId, {
+            planId: plan.id,
+            status: 'active',
+            provider: 'local',
+          })
+        } else {
+          // Planos pagos: período de teste no plano escolhido; assinatura em Planos depois
+          updateSubscription(tenantId, createTrialSubscription(plan.id))
         }
         goNext()
       } finally {
@@ -654,6 +696,64 @@ export default function AdminOnboarding({ onComplete }) {
             </Box>
           )}
 
+          {stepId === 'plan' && (
+            <Box className="onboard-panel">
+              <Box className="onboard-kicker">
+                <WorkspacePremiumOutlinedIcon fontSize="small" />
+                Assinatura
+              </Box>
+              <Typography className="onboard-title">Escolha o seu plano</Typography>
+              <Typography className="onboard-sub">
+                Esta etapa é obrigatória. Selecione um plano para liberar o sistema.
+              </Typography>
+              <Alert severity="info" className="onboard-notice">
+                Planos pagos começam com período de teste. Você pode assinar pelo Mercado Pago
+                depois em Planos.
+              </Alert>
+              <Box className="onboard-plan-grid" role="list" aria-label="Planos disponíveis">
+                {BILLING_PLANS.map((plan) => {
+                  const selected = selectedPlanId === plan.id
+                  return (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      role="listitem"
+                      className={[
+                        'onboard-plan-card',
+                        plan.highlight ? 'is-featured' : '',
+                        selected ? 'is-selected' : '',
+                      ].filter(Boolean).join(' ')}
+                      onClick={() => {
+                        setError('')
+                        setSelectedPlanId(plan.id)
+                      }}
+                    >
+                      <span className="onboard-plan-name">{plan.name}</span>
+                      {plan.highlight ? <span className="onboard-plan-badge">Popular</span> : null}
+                      <span className={`onboard-plan-price${plan.price <= 0 && plan.compareAtPrice ? ' is-free-strike' : ''}`}>
+                        {plan.price <= 0 && plan.compareAtPrice ? (
+                          <span className="onboard-plan-price-strike">{formatPlanPrice(plan)}</span>
+                        ) : (
+                          formatPlanPrice(plan)
+                        )}
+                        {(plan.price > 0 || plan.compareAtPrice > 0) && (
+                          <span className="onboard-plan-period">/mês</span>
+                        )}
+                      </span>
+                      <span className="onboard-plan-desc">{plan.description}</span>
+                      {selected ? (
+                        <span className="onboard-plan-check">
+                          <CheckRoundedIcon fontSize="inherit" />
+                          Selecionado
+                        </span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </Box>
+            </Box>
+          )}
+
           {stepId === 'done' && (
             <Box className="onboard-panel onboard-welcome">
               <Box className="onboard-badge is-success">
@@ -663,7 +763,9 @@ export default function AdminOnboarding({ onComplete }) {
               <Typography className="onboard-brand">Parquinho</Typography>
               <Typography className="onboard-title">Seu espaço está configurado</Typography>
               <Typography className="onboard-sub">
-                Aparência definida{unitName.trim() ? ` · unidade “${unitName.trim()}”` : ''}.
+                Aparência definida
+                {unitName.trim() ? ` · unidade “${unitName.trim()}”` : ''}
+                {selectedPlanId ? ` · plano ${getPlanById(selectedPlanId)?.name || ''}` : ''}.
                 Explore o menu e continue personalizando quando quiser.
               </Typography>
             </Box>
@@ -695,12 +797,13 @@ export default function AdminOnboarding({ onComplete }) {
             className="onboard-btn-primary"
             endIcon={stepId === 'done' ? <CheckRoundedIcon /> : <ArrowForwardRoundedIcon />}
             onClick={handlePrimary}
-            disabled={busy}
+            disabled={busy || (stepId === 'plan' && !selectedPlanId)}
           >
             {stepId === 'welcome' && 'Começar'}
             {(stepId === 'theme' || stepId === 'logo' || stepId === 'background' || stepId === 'bgFrame') && 'Continuar'}
             {stepId === 'unit' && 'Salvar unidade'}
             {stepId === 'manager' && 'Continuar'}
+            {stepId === 'plan' && 'Confirmar plano'}
             {stepId === 'done' && 'Entrar no sistema'}
           </Button>
         </Box>
