@@ -24,12 +24,12 @@ export const ROLE_ROUTES = {
   administrador: [
     '/dashboard', '/children', '/staff', '/historico', '/balanco', '/activities',
     '/chat', '/informacoes', '/avaliacoes', '/unidades', '/configuracao',
-    '/relatorios',
+    '/relatorios', '/planos',
   ],
   admin: [
     '/dashboard', '/children', '/staff', '/historico', '/balanco', '/activities',
     '/chat', '/informacoes', '/avaliacoes', '/unidades', '/configuracao',
-    '/relatorios',
+    '/relatorios', '/planos',
   ],
   gerente: [
     '/dashboard', '/children', '/staff', '/historico', '/balanco', '/activities',

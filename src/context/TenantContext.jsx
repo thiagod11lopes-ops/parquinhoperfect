@@ -3,6 +3,7 @@ import React, {
 } from 'react'
 import { syncedStorage } from '../firebase/syncedStorage'
 import { normalizePhoneBr } from '../firebase/authMethods'
+import { createTrialSubscription, normalizeSubscription } from '../billing/plans'
 
 const TenantContext = createContext(null)
 
@@ -76,14 +77,16 @@ function loadTenant(tenantId) {
     const raw = syncedStorage.getItem(tenantKey(tenantId))
     if (!raw) return null
     const parsed = JSON.parse(raw)
+    const createdAt = parsed.createdAt || new Date().toISOString()
     return {
       id: parsed.id || tenantId,
       adminEmail: normalizeEmail(parsed.adminEmail),
       adminName: parsed.adminName || 'Administrador',
-      createdAt: parsed.createdAt || new Date().toISOString(),
+      createdAt,
       units: Array.isArray(parsed.units) ? parsed.units : [],
       members: Array.isArray(parsed.members) ? parsed.members : [],
       setupCompleted: Boolean(parsed.setupCompleted),
+      subscription: normalizeSubscription(parsed.subscription, createdAt),
     }
   } catch {
     return null
@@ -252,14 +255,16 @@ export function TenantProvider({ children }) {
       return { success: false, error: 'Este e-mail já está vinculado a outro cadastro.' }
     }
 
+    const createdAt = new Date().toISOString()
     const tenant = {
       id: `tenant-${Date.now()}`,
       adminEmail: mail,
       adminName: String(name || '').trim() || mail.split('@')[0],
-      createdAt: new Date().toISOString(),
+      createdAt,
       units: [],
       members: [],
       setupCompleted: false,
+      subscription: createTrialSubscription('starter'),
     }
     persistTenant(tenant)
     index[mail] = { tenantId: tenant.id, role: 'administrador' }
@@ -509,6 +514,34 @@ export function TenantProvider({ children }) {
     return { success: true }
   }, [bump])
 
+  const updateSubscription = useCallback((tenantId, patch = {}) => {
+    const tenant = loadTenant(tenantId)
+    if (!tenant) return { success: false, error: 'Banco não encontrado.' }
+    const nextSub = normalizeSubscription({
+      ...tenant.subscription,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    }, tenant.createdAt)
+    const next = { ...tenant, subscription: nextSub }
+    persistTenant(next)
+    bump()
+    return { success: true, subscription: nextSub, tenant: next }
+  }, [bump])
+
+  const activatePaidPlan = useCallback((tenantId, planId, meta = {}) => {
+    const periodEnd = new Date()
+    periodEnd.setMonth(periodEnd.getMonth() + 1)
+    return updateSubscription(tenantId, {
+      planId,
+      status: 'active',
+      provider: 'mercado_pago',
+      currentPeriodEnd: periodEnd.toISOString(),
+      mpPreferenceId: meta.mpPreferenceId || null,
+      mpPaymentId: meta.mpPaymentId || null,
+      mpPreapprovalId: meta.mpPreapprovalId || null,
+    })
+  }, [updateSubscription])
+
   const renameUnit = useCallback((tenantId, unitId, name) => {
     const trimmed = String(name || '').trim()
     if (!trimmed) return { success: false, error: 'Informe o nome da unidade.' }
@@ -612,6 +645,8 @@ export function TenantProvider({ children }) {
     renameUnit,
     deleteUnit,
     completeSetup,
+    updateSubscription,
+    activatePaidPlan,
     exportTenant,
     importTenant,
     resolveEmailAccess,
@@ -622,7 +657,7 @@ export function TenantProvider({ children }) {
   }), [
     tick, getTenant, createAdminTenant, inviteMember, resendInvite, revokeMember,
     changeMemberEmail, updateMember, activateInvite, createUnit, renameUnit, deleteUnit,
-    completeSetup, exportTenant, importTenant,
+    completeSetup, updateSubscription, activatePaidPlan, exportTenant, importTenant,
   ])
 
   return (

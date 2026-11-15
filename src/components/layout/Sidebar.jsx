@@ -21,6 +21,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import StarRateIcon from '@mui/icons-material/StarRate'
 import BusinessIcon from '@mui/icons-material/Business'
 import SettingsIcon from '@mui/icons-material/Settings'
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
 import { useAuth } from '../../context/AuthContext'
 import { useAppearance } from '../../context/AppearanceContext'
 import { useChat } from '../../context/ChatContext'
@@ -44,6 +45,7 @@ const GERENTE_ITEMS = [
 const ADMIN_ITEMS = [
   { label: 'Unidades', path: '/unidades', icon: <BusinessIcon /> },
   ...GERENTE_ITEMS.filter((item) => item.path !== '/presenca'),
+  { label: 'Planos', path: '/planos', icon: <WorkspacePremiumIcon /> },
   { label: 'Configuração', path: '/configuracao', icon: <SettingsIcon /> },
 ]
 

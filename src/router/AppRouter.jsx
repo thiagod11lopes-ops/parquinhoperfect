@@ -22,6 +22,7 @@ import Unidades from '../pages/Unidades/Unidades'
 import Configuracao from '../pages/Configuracao/Configuracao'
 import Relatorios from '../pages/Relatorios/Relatorios'
 import Presenca from '../pages/Presenca/Presenca'
+import Planos from '../pages/Planos/Planos'
 import { useAuth } from '../context/AuthContext'
 
 function AuthRedirect() {
@@ -48,6 +49,7 @@ export default function AppRouter() {
         <Route path="avaliacoes" element={<ProtectedRoute><Avaliacoes /></ProtectedRoute>} />
         <Route path="unidades" element={<ProtectedRoute><Unidades /></ProtectedRoute>} />
         <Route path="configuracao" element={<ProtectedRoute><Configuracao /></ProtectedRoute>} />
+        <Route path="planos" element={<ProtectedRoute><Planos /></ProtectedRoute>} />
         <Route path="relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
         <Route path="presenca" element={<ProtectedRoute><Presenca /></ProtectedRoute>} />
 

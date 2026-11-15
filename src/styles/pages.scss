@@ -5918,3 +5918,72 @@
   margin-top: 14px !important;
   opacity: 0.9;
 }
+
+.planos-page {
+  .planos-status-card {
+    margin-bottom: 1rem;
+    padding: 1rem 1.1rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .planos-grid {
+    padding-bottom: 1.5rem;
+  }
+
+  .planos-card {
+    padding: 1.1rem 1.15rem 1.2rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+
+    &.is-highlight {
+      border-color: rgba(249, 115, 22, 0.55);
+      box-shadow: 0 14px 34px rgba(249, 115, 22, 0.22);
+    }
+
+    &.is-current {
+      outline: 2px solid rgba(34, 197, 94, 0.55);
+    }
+  }
+
+  .planos-card-name {
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    text-shadow: none !important;
+  }
+
+  .planos-card-price {
+    margin-top: 0.35rem !important;
+    font-size: 1.45rem !important;
+    font-weight: 900 !important;
+    color: #ea580c !important;
+    -webkit-text-fill-color: #ea580c !important;
+    text-shadow: none !important;
+
+    span {
+      margin-left: 0.25rem;
+      font-size: 0.85rem !important;
+      font-weight: 700 !important;
+      color: #64748b !important;
+      -webkit-text-fill-color: #64748b !important;
+      text-shadow: none !important;
+    }
+  }
+
+  .planos-card-desc,
+  .planos-card .MuiTypography-body2 {
+    color: #334155 !important;
+    -webkit-text-fill-color: #334155 !important;
+    text-shadow: none !important;
+  }
+
+  .planos-card .MuiSvgIcon-root {
+    color: #16a34a !important;
+    filter: none !important;
+  }
+}

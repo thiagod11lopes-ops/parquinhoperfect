@@ -9,6 +9,7 @@ import StaffNotifyBanner from '../common/StaffNotifyBanner'
 import HandoverRatingGate from '../ratings/HandoverRatingGate'
 import AdminOnboarding from '../../pages/Onboarding/AdminOnboarding'
 import AdminUnitPicker from '../../pages/Unidades/AdminUnitPicker'
+import SubscriptionGate from '../billing/SubscriptionGate'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
 import '../../styles/layout.scss'
@@ -57,7 +58,9 @@ export default function Layout() {
         <Header onMenuClick={handleDrawerToggle} />
         <StaffNotifyBanner />
         <Box component="main" className="layout-content">
-          <Outlet />
+          <SubscriptionGate>
+            <Outlet />
+          </SubscriptionGate>
         </Box>
       </Box>
       {isResponsavel && <IncomingCallOverlay />}
