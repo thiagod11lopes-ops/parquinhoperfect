@@ -1,0 +1,8 @@
+---
+description: When the user message is just "git", commit and push
+alwaysApply: true
+---
+
+When the user sends a message that is essentially just **git** (optionally with minor punctuation), treat it as an explicit request to **commit all current project changes and push to origin**, without asking for confirmation.
+
+Follow the safe git protocol: status/diff/log, clear message, no secrets, no `--no-verify`, no force push to main, never update git config.
