@@ -37,9 +37,10 @@ function mapAuthError(err) {
     'auth/invalid-verification-code': 'Código SMS inválido.',
     'auth/code-expired': 'Código SMS expirado. Solicite outro.',
     'auth/captcha-check-failed': 'Falha na verificação reCAPTCHA. Atualize a página.',
-    'auth/operation-not-allowed': 'Este método de login ainda não foi ativado no Firebase Console.',
+    'auth/operation-not-allowed': 'Este método de login não está disponível agora. Se for SMS, confira se o provedor Telefone está ativo e se o Brasil está liberado nas regiões de SMS.',
     'auth/unauthorized-domain': 'Domínio não autorizado no Firebase Authentication.',
-    'auth/billing-not-enabled': 'SMS exige plano Blaze no Firebase (ou números de teste).',
+    'auth/billing-not-enabled': 'Para enviar SMS real, o Firebase precisa do plano Blaze (ou use um número de teste).',
+    'auth/admin-restricted-operation': 'Operação restrita pelo Firebase. Verifique regiões de SMS e plano da conta.',
   }
   return messages[code] || err?.message || 'Falha na autenticação.'
 }
