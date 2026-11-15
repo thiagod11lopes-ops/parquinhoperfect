@@ -6251,17 +6251,82 @@
   margin-top: 0.15rem;
   padding: 1.05rem 1.05rem 1.15rem;
   border-radius: 28px;
-  background: linear-gradient(180deg, #fffaf5 0%, #fff7ed 100%);
-  border: 1px solid rgba(255, 237, 213, 0.7);
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 12px 28px rgba(28, 20, 16, 0.12);
   animation: planosRise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.planos-detail-desc {
-  font-size: 0.92rem !important;
-  line-height: 1.4 !important;
-  color: var(--planos-muted) !important;
-  -webkit-text-fill-color: var(--planos-muted) !important;
-  text-shadow: none !important;
+/* Vence o tema global (#phone-app-root força texto branco) */
+#phone-app-root .planos-detail,
+#root .planos-detail {
+  .planos-detail-desc,
+  .planos-detail-desc.MuiTypography-root {
+    font-size: 0.95rem !important;
+    line-height: 1.45 !important;
+    font-weight: 700 !important;
+    color: #57534e !important;
+    -webkit-text-fill-color: #57534e !important;
+    text-shadow: none !important;
+  }
+
+  .planos-feature .MuiTypography-root,
+  .planos-feature p,
+  .planos-feature span {
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    color: #1c1917 !important;
+    -webkit-text-fill-color: #1c1917 !important;
+    text-shadow: none !important;
+  }
+
+  .planos-feature-icon {
+    background: #ffedd5;
+    color: #c2410c;
+
+    .MuiSvgIcon-root {
+      font-size: 1rem !important;
+      color: #c2410c !important;
+      -webkit-text-fill-color: #c2410c !important;
+      filter: none !important;
+      text-shadow: none !important;
+    }
+  }
+
+  .planos-cta.MuiButton-root {
+    height: 52px !important;
+    border-radius: 16px !important;
+    text-transform: none !important;
+    font-weight: 800 !important;
+    font-size: 0.98rem !important;
+    background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
+    color: #fff7ed !important;
+    -webkit-text-fill-color: #fff7ed !important;
+    text-shadow: none !important;
+
+    .MuiSvgIcon-root {
+      color: #fff7ed !important;
+      -webkit-text-fill-color: #fff7ed !important;
+      filter: none !important;
+    }
+
+    &:disabled {
+      opacity: 0.72;
+      color: #fff7ed !important;
+      -webkit-text-fill-color: #fff7ed !important;
+    }
+  }
+
+  .planos-cta-note,
+  .planos-cta-note.MuiTypography-root {
+    margin-top: 0.65rem !important;
+    text-align: center;
+    font-size: 0.76rem !important;
+    font-weight: 700 !important;
+    color: #78716c !important;
+    -webkit-text-fill-color: #78716c !important;
+    text-shadow: none !important;
+  }
 }
 
 .planos-features {
@@ -6274,13 +6339,6 @@
   display: flex;
   align-items: center;
   gap: 0.65rem;
-
-  .MuiTypography-root {
-    font-size: 0.9rem !important;
-    color: var(--planos-ink) !important;
-    -webkit-text-fill-color: var(--planos-ink) !important;
-    text-shadow: none !important;
-  }
 }
 
 .planos-feature-icon {
@@ -6290,14 +6348,6 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  background: rgba(234, 88, 12, 0.12);
-  color: var(--planos-orange);
-
-  .MuiSvgIcon-root {
-    font-size: 1rem !important;
-    color: var(--planos-orange) !important;
-    filter: none !important;
-  }
 }
 
 .planos-cta {
@@ -6305,35 +6355,12 @@
   border-radius: 16px !important;
   text-transform: none !important;
   font-weight: 800 !important;
-  font-size: 0.98rem !important;
-  background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
-  color: #fff7ed !important;
-  -webkit-text-fill-color: #fff7ed !important;
-  text-shadow: none !important;
   transition: transform 0.2s ease, filter 0.2s ease !important;
 
   &:hover:not(:disabled) {
     transform: translateY(-1px);
     filter: brightness(1.04);
   }
-
-  &:disabled {
-    opacity: 0.7;
-  }
-
-  .MuiSvgIcon-root {
-    color: #fff7ed !important;
-    filter: none !important;
-  }
-}
-
-.planos-cta-note {
-  margin-top: 0.65rem !important;
-  text-align: center;
-  font-size: 0.75rem !important;
-  color: rgba(28, 20, 16, 0.5) !important;
-  -webkit-text-fill-color: rgba(28, 20, 16, 0.5) !important;
-  text-shadow: none !important;
 }
 
 @keyframes planosRise {
