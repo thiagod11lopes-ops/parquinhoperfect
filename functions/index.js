@@ -29,11 +29,23 @@ function addMonths(date, months) {
   return d
 }
 
+function cleanAccessToken(token) {
+  return String(token || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/^Bearer\s+/i, '')
+    .replace(/[\r\n\t\v\f\u00a0]/g, '')
+    .trim()
+}
+
 async function mpFetch(path, { method = 'GET', body, token } = {}) {
+  const accessToken = cleanAccessToken(token)
+  if (!accessToken) {
+    throw new Error('MP_ACCESS_TOKEN vazio ou inválido.')
+  }
   const res = await fetch(`https://api.mercadopago.com${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: body ? JSON.stringify(body) : undefined,

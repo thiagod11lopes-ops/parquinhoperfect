@@ -33,6 +33,8 @@ jobs:
       - name: Build
         env:
           GITHUB_PAGES: 'true'
+          VITE_MP_SANDBOX: 'true'
+          VITE_MP_FUNCTIONS_URL: 'https://us-central1-parquinhoperfect.cloudfunctions.net'
         run: npm run build
 
       # SPA fallback: deep links reload correctly on GitHub Pages

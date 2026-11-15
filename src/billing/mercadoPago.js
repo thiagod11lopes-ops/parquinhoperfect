@@ -68,7 +68,8 @@ export async function startMercadoPagoCheckout({
     if (!data.init_point && !data.sandbox_init_point) {
       return { success: false, error: 'Checkout sem URL de retorno do Mercado Pago.' }
     }
-    const useSandbox = import.meta.env.VITE_MP_SANDBOX === 'true'
+    // Padrão: sandbox (teste). Só usa checkout real se VITE_MP_SANDBOX=false
+    const useSandbox = import.meta.env.VITE_MP_SANDBOX !== 'false'
     return {
       success: true,
       initPoint: useSandbox
