@@ -252,6 +252,26 @@ export function AuthProvider({ children }) {
 
   const loginWithGoogle = async (role) => {
     const identity = await firebaseSignInWithGoogle()
+    if (!identity?.success) return identity
+
+    const wanted = role === 'admin' ? 'administrador' : role
+    const mail = normalizeEmail(identity.email)
+
+    // Valida a pirâmide logo após o Google, antes de liberar sessão do app
+    if (wanted !== 'administrador') {
+      const resolved = resolveRoleAccess(wanted, mail)
+      if (!resolved.success && !resolved.needsStart) {
+        await firebaseSignOut()
+        return resolved
+      }
+    } else {
+      const access = resolveEmailAccess(mail)
+      if (access && access.kind !== 'admin') {
+        await firebaseSignOut()
+        return { success: false, error: 'Este e-mail já está cadastrado em outro papel.' }
+      }
+    }
+
     return finishWithFirebaseIdentity(role, identity)
   }
 
@@ -260,6 +280,22 @@ export function AuthProvider({ children }) {
     if (!isValidEmail(mail)) return { success: false, error: 'Informe um e-mail válido.' }
     if (!password || String(password).length < 6) {
       return { success: false, error: 'A senha precisa ter pelo menos 6 caracteres.' }
+    }
+
+    const wanted = role === 'admin' ? 'administrador' : role
+
+    // Valida a pirâmide ANTES do Firebase (exceto admin criando banco novo)
+    if (wanted === 'administrador') {
+      const access = resolveEmailAccess(mail)
+      if (access && access.kind !== 'admin') {
+        return { success: false, error: 'Este e-mail já está cadastrado em outro papel.' }
+      }
+    } else {
+      const resolved = resolveRoleAccess(wanted, mail)
+      if (!resolved.success) {
+        // needsStart (convite pendente) ainda exige autenticar depois
+        if (!resolved.needsStart) return resolved
+      }
     }
 
     let identity
