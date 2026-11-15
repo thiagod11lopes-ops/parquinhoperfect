@@ -2,10 +2,12 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react'
 import { syncedStorage } from '../firebase/syncedStorage'
+import { normalizePhoneBr } from '../firebase/authMethods'
 
 const TenantContext = createContext(null)
 
 const INDEX_KEY = 'parquinhoTenantIndex'
+const PHONE_INDEX_KEY = 'parquinhoPhoneIndex'
 const tenantKey = (id) => `parquinhoTenant:${id}`
 
 export function normalizeEmail(email = '') {
@@ -14,6 +16,10 @@ export function normalizeEmail(email = '') {
 
 export function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email))
+}
+
+export function normalizePhone(phone = '') {
+  return normalizePhoneBr(phone)
 }
 
 function loadIndex() {
@@ -29,6 +35,39 @@ function loadIndex() {
 function persistIndex(index) {
   syncedStorage.setItem(INDEX_KEY, JSON.stringify(index))
   window.dispatchEvent(new CustomEvent('parquinho-tenant'))
+}
+
+function loadPhoneIndex() {
+  try {
+    const raw = syncedStorage.getItem(PHONE_INDEX_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistPhoneIndex(index) {
+  syncedStorage.setItem(PHONE_INDEX_KEY, JSON.stringify(index))
+  window.dispatchEvent(new CustomEvent('parquinho-tenant'))
+}
+
+function setPhoneIndexEntry(phone, entry) {
+  const key = normalizePhone(phone)
+  if (!key) return
+  const index = loadPhoneIndex()
+  index[key] = entry
+  persistPhoneIndex(index)
+}
+
+function clearPhoneIndexEntry(phone) {
+  const key = normalizePhone(phone)
+  if (!key) return
+  const index = loadPhoneIndex()
+  if (index[key]) {
+    delete index[key]
+    persistPhoneIndex(index)
+  }
 }
 
 function loadTenant(tenantId) {
@@ -89,6 +128,29 @@ function makeMember({
   }
 }
 
+function memberAccessPayload(tenant, member, mail) {
+  const unit = tenant.units.find((u) => u.id === member.unitId)
+  return {
+    kind: 'member',
+    role: member.role,
+    status: member.status,
+    tenantId: tenant.id,
+    adminEmail: tenant.adminEmail,
+    adminName: tenant.adminName,
+    unitId: member.unitId,
+    unitName: unit?.name || '',
+    email: mail || member.email,
+    name: member.name,
+    memberId: member.id,
+    invitedByEmail: member.invitedByEmail,
+    phone: member.phone,
+    childName: member.childName,
+    childAge: member.childAge ?? null,
+    childPlan: member.childPlan || '',
+    childAllergies: member.childAllergies || '',
+  }
+}
+
 /** Lookup global por e-mail (login) */
 export function resolveEmailAccess(email) {
   const mail = normalizeEmail(email)
@@ -109,6 +171,7 @@ export function resolveEmailAccess(email) {
       email: mail,
       name: tenant.adminName,
       status: 'active',
+      phone: null,
     }
   }
 
@@ -120,27 +183,38 @@ export function resolveEmailAccess(email) {
     return { kind: 'revoked', email: mail }
   }
 
-  const unit = tenant.units.find((u) => u.id === member.unitId)
+  return memberAccessPayload(tenant, member, mail)
+}
 
-  return {
-    kind: 'member',
-    role: member.role,
-    status: member.status,
-    tenantId: tenant.id,
-    adminEmail: tenant.adminEmail,
-    adminName: tenant.adminName,
-    unitId: member.unitId,
-    unitName: unit?.name || '',
-    email: mail,
-    name: member.name,
-    memberId: member.id,
-    invitedByEmail: member.invitedByEmail,
-    phone: member.phone,
-    childName: member.childName,
-    childAge: member.childAge ?? null,
-    childPlan: member.childPlan || '',
-    childAllergies: member.childAllergies || '',
+/** Lookup global por telefone (login SMS, tipicamente responsável) */
+export function resolvePhoneAccess(phone) {
+  const key = normalizePhone(phone)
+  if (!key) return null
+  const phoneIndex = loadPhoneIndex()
+  const entry = phoneIndex[key]
+  if (entry?.tenantId && entry?.memberId) {
+    const tenant = loadTenant(entry.tenantId)
+    if (!tenant) return null
+    const member = tenant.members.find((m) => m.id === entry.memberId)
+    if (!member || member.status === 'revoked') {
+      return { kind: 'revoked', phone: key }
+    }
+    return memberAccessPayload(tenant, member, member.email)
   }
+
+  // Fallback: busca em tenants conhecidos do índice de e-mail
+  const emailIndex = loadIndex()
+  const tenantIds = [...new Set(Object.values(emailIndex).map((e) => e?.tenantId).filter(Boolean))]
+  for (const tenantId of tenantIds) {
+    const tenant = loadTenant(tenantId)
+    if (!tenant) continue
+    const member = tenant.members.find((m) => normalizePhone(m.phone) === key && m.status !== 'revoked')
+    if (member) {
+      setPhoneIndexEntry(key, { tenantId, memberId: member.id, role: member.role })
+      return memberAccessPayload(tenant, member, member.email)
+    }
+  }
+  return null
 }
 
 export function useTenant() {
@@ -251,8 +325,8 @@ export function TenantProvider({ children }) {
 
     const without = tenant.members.filter((m) => m.email !== mail)
     const member = makeMember({
-      email: mail, name, role, unitId, invitedByEmail, invitedByRole, phone, childName,
-      childAge, childPlan, childAllergies,
+      email: mail, name, role, unitId, invitedByEmail, invitedByRole, phone: normalizePhone(phone) || phone || '',
+      childName, childAge, childPlan, childAllergies,
     })
     const next = { ...tenant, members: [member, ...without] }
     persistTenant(next)
@@ -260,6 +334,9 @@ export function TenantProvider({ children }) {
     const index = loadIndex()
     index[mail] = { tenantId, role, memberId: member.id }
     persistIndex(index)
+    if (member.phone) {
+      setPhoneIndexEntry(member.phone, { tenantId, memberId: member.id, role })
+    }
     bump()
     return { success: true, member }
   }, [bump, ensureEmailFree])
@@ -299,6 +376,7 @@ export function TenantProvider({ children }) {
       delete index[member.email]
       persistIndex(index)
     }
+    if (member.phone) clearPhoneIndexEntry(member.phone)
     bump()
     return { success: true }
   }, [bump])
@@ -347,11 +425,15 @@ export function TenantProvider({ children }) {
       if (!free.ok) return { success: false, error: free.error }
     }
 
+    const nextPhone = patch.phone != null
+      ? (normalizePhone(patch.phone) || String(patch.phone).trim())
+      : member.phone
+
     const updated = {
       ...member,
       name: patch.name != null ? String(patch.name).trim() || member.name : member.name,
       email: nextEmail,
-      phone: patch.phone != null ? patch.phone : member.phone,
+      phone: nextPhone,
       childName: patch.childName != null ? patch.childName : member.childName,
       childAge: patch.childAge !== undefined ? patch.childAge : member.childAge,
       childPlan: patch.childPlan != null ? patch.childPlan : member.childPlan,
@@ -370,6 +452,13 @@ export function TenantProvider({ children }) {
       delete index[member.email]
       index[nextEmail] = { tenantId, role: member.role, memberId }
       persistIndex(index)
+    }
+
+    if (normalizePhone(member.phone) !== normalizePhone(updated.phone)) {
+      if (member.phone) clearPhoneIndexEntry(member.phone)
+      if (updated.phone) {
+        setPhoneIndexEntry(updated.phone, { tenantId, memberId, role: member.role })
+      }
     }
 
     bump()
@@ -526,7 +615,9 @@ export function TenantProvider({ children }) {
     exportTenant,
     importTenant,
     resolveEmailAccess,
+    resolvePhoneAccess,
     normalizeEmail,
+    normalizePhone,
     isValidEmail,
   }), [
     tick, getTenant, createAdminTenant, inviteMember, resendInvite, revokeMember,

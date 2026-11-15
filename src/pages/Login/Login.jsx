@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box, Typography, Button, TextField, IconButton, Alert, CircularProgress, Dialog, DialogTitle,
-  DialogContent, DialogActions,
+  DialogContent, DialogActions, Divider,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
@@ -10,10 +10,14 @@ import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount'
 import GroupIcon from '@mui/icons-material/Group'
 import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom'
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
+import EmailIcon from '@mui/icons-material/Email'
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
 import { useAppearance } from '../../context/AppearanceContext'
 import { useSampleData } from '../../context/SampleDataContext'
+import { clearRecaptcha } from '../../firebase/authMethods'
 import AdminOnboarding from '../Onboarding/AdminOnboarding'
 import logoSplash from '../../assets/logo-splash.webp'
 import '../../styles/global.scss'
@@ -41,7 +45,10 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const {
-    loginWithEmail,
+    loginWithGoogle,
+    loginWithPassword,
+    startPhoneLogin,
+    confirmPhoneLogin,
     loginAdminAfterCreate,
     activateAndLogin,
     logout,
@@ -55,14 +62,20 @@ export default function Login() {
 
   const [phase, setPhase] = useState('splash')
   const [role, setRole] = useState(null)
+  const [authMethod, setAuthMethod] = useState(null)
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordMode, setPasswordMode] = useState('signin')
   const [adminName, setAdminName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [smsCode, setSmsCode] = useState('')
+  const [phoneConfirmation, setPhoneConfirmation] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [invite, setInvite] = useState(null)
+  const [pendingAuthMeta, setPendingAuthMeta] = useState(null)
 
   useEffect(() => {
-    // Só limpa sessão antiga ao abrir o login — não durante o onboarding da 1ª vez
     if (isAuthenticated && phase !== 'onboarding') logout()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -76,11 +89,25 @@ export default function Login() {
     return () => clearTimeout(t)
   }, [])
 
+  useEffect(() => () => clearRecaptcha(), [])
+
   const goBack = () => {
     setError('')
     setEmail('')
+    setPassword('')
     setAdminName('')
+    setPhone('')
+    setSmsCode('')
+    setPhoneConfirmation(null)
     setInvite(null)
+    setPendingAuthMeta(null)
+    setPasswordMode('signin')
+    clearRecaptcha()
+    if (authMethod) {
+      setAuthMethod(null)
+      setPhase('method')
+      return
+    }
     setRole(null)
     setPhase('choose')
   }
@@ -92,65 +119,128 @@ export default function Login() {
   const openRole = (nextRole) => {
     setError('')
     setEmail('')
+    setPassword('')
     setAdminName('')
+    setPhone('')
+    setSmsCode('')
+    setPhoneConfirmation(null)
+    setAuthMethod(null)
+    setPasswordMode('signin')
     setRole(nextRole)
-    setPhase('email')
+    setPhase('method')
   }
 
-  const handleContinue = async () => {
+  const openMethod = (method) => {
+    setError('')
+    setAuthMethod(method)
+    setPhase('auth')
+  }
+
+  const handleAdminCreateIfNeeded = (result) => {
+    if (!result?.needsAdminCreate) return false
+    const created = createAdminTenant(result.email, result.name)
+    if (!created.success) {
+      setError(created.error || 'Não foi possível criar o banco.')
+      return true
+    }
+    resetAppearance()
+    if (sampleEnabled) toggleSampleData()
+    localStorage.setItem('sampleDataEnabled', 'false')
+    loginAdminAfterCreate(created.tenant, result.email, result.name, result.authMeta || pendingAuthMeta || {})
+    setPhase('onboarding')
+    return true
+  }
+
+  const handleAuthResult = (result) => {
+    if (handleAdminCreateIfNeeded(result)) return
+    if (result.needsStart && result.invite) {
+      setInvite(result.invite)
+      setPendingAuthMeta(result.authMeta || pendingAuthMeta)
+      return
+    }
+    if (result.success) {
+      afterLogin(result.homeRoute)
+      return
+    }
+    setError(result.error || 'Não foi possível entrar.')
+  }
+
+  const handleGoogle = async () => {
     setError('')
     setLoading(true)
     try {
-      if (role === 'administrador') {
-        const result = await loginWithEmail('administrador', { email, name: adminName })
-        if (result.needsAdminCreate) {
-          const created = createAdminTenant(result.email, result.name)
-          if (!created.success) {
-            setError(created.error || 'Não foi possível criar o banco.')
-            return
-          }
-          // Banco novo: sem dados de exemplo e aparência padrão limpa
-          resetAppearance()
-          if (sampleEnabled) toggleSampleData()
-          localStorage.setItem('sampleDataEnabled', 'false')
-          loginAdminAfterCreate(created.tenant, result.email, result.name)
-          setPhase('onboarding')
-          return
-        }
-        if (result.success) {
-          afterLogin(result.homeRoute)
-          return
-        }
-        setError(result.error || 'Não foi possível entrar.')
-        return
-      }
-
-      const result = await loginWithEmail(role, { email })
-      if (result.needsStart && result.invite) {
-        setInvite(result.invite)
-        return
-      }
-      if (result.success) {
-        afterLogin(result.homeRoute)
-        return
-      }
-      setError(result.error || 'Não foi possível entrar.')
+      const result = await loginWithGoogle(role)
+      setPendingAuthMeta(result.authMeta || null)
+      handleAuthResult(result)
     } catch {
-      setError('Falha no login. Tente novamente.')
+      setError('Falha no login com Google.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePassword = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await loginWithPassword(role, {
+        email,
+        password,
+        name: adminName,
+        mode: passwordMode,
+      })
+      if (result.needsSignup) {
+        setPasswordMode('signup')
+        setError(result.error)
+        return
+      }
+      handleAuthResult(result)
+    } catch {
+      setError('Falha no login com e-mail e senha.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSendSms = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await startPhoneLogin(role, phone)
+      if (!result.success) {
+        setError(result.error || 'Não foi possível enviar o SMS.')
+        return
+      }
+      setPhoneConfirmation(result.confirmation)
+    } catch {
+      setError('Falha ao enviar SMS.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConfirmSms = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await confirmPhoneLogin(role, phoneConfirmation, smsCode)
+      handleAuthResult(result)
+    } catch {
+      setError('Falha ao validar o código SMS.')
     } finally {
       setLoading(false)
     }
   }
 
   const handleStartInvite = () => {
-    if (!invite?.email) return
+    if (!invite?.email && !invite?.phone) return
     const activated = activateInvite(invite.email)
     if (!activated.success) {
       setError(activated.error || 'Não foi possível iniciar.')
       setInvite(null)
       return
     }
-    const logged = activateAndLogin(activated.access)
+    const logged = activateAndLogin(activated.access, pendingAuthMeta || {})
     if (logged.success) afterLogin(logged.homeRoute)
   }
 
@@ -162,10 +252,13 @@ export default function Login() {
     )
   }
 
+  const roleTitle = role === 'administrador' ? 'Administrador' : ROLE_LABEL[role]
+
   return (
     <Box className={`access-gate ${phase === 'splash' ? 'is-splash' : 'is-ready'}`}>
       <Box className="access-gate-bg" aria-hidden />
       <Box className="access-gate-glow" aria-hidden />
+      <Box id="firebase-recaptcha" sx={{ position: 'absolute', left: -9999, width: 1, height: 1 }} />
 
       {phase === 'splash' ? (
         <Box className="access-splash">
@@ -187,7 +280,7 @@ export default function Login() {
             <Box className="access-choose">
               <Typography className="access-title">Como deseja entrar?</Typography>
               <Typography className="access-sub">
-                Use o e-mail cadastrado na sua hierarquia
+                Escolha seu papel e depois o método de login
               </Typography>
 
               <Button fullWidth disableElevation className="access-role-btn access-role-btn--admin"
@@ -209,21 +302,100 @@ export default function Login() {
             </Box>
           )}
 
-          {phase === 'email' && (
+          {phase === 'method' && (
             <Box className="access-professor">
               <IconButton className="access-back-btn" onClick={goBack} aria-label="Voltar" size="small">
                 <ArrowBackIcon fontSize="small" />
               </IconButton>
 
-              <Typography className="access-title">
-                {role === 'administrador' ? 'Administrador' : ROLE_LABEL[role]}
-              </Typography>
+              <Typography className="access-title">{roleTitle}</Typography>
+              <Typography className="access-sub">Escolha como autenticar</Typography>
+              {error && <Alert severity="error" className="access-alert">{error}</Alert>}
+
+              <Button
+                fullWidth
+                className="access-google-btn"
+                onClick={() => openMethod('google')}
+                sx={{ mb: 1.25 }}
+              >
+                <GoogleIcon /> Continuar com Google
+              </Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                className="access-role-btn"
+                startIcon={<EmailIcon />}
+                onClick={() => openMethod('password')}
+                sx={{ mb: 1.25 }}
+              >
+                E-mail e senha
+              </Button>
+
+              {role === 'responsavel' && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  className="access-role-btn"
+                  startIcon={<PhoneIphoneIcon />}
+                  onClick={() => openMethod('phone')}
+                >
+                  Telefone (SMS)
+                </Button>
+              )}
+
+              {role !== 'responsavel' && (
+                <Typography className="access-sub" sx={{ mt: 1.5 }}>
+                  SMS está disponível para Responsáveis.
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {phase === 'auth' && authMethod === 'google' && (
+            <Box className="access-professor">
+              <IconButton className="access-back-btn" onClick={goBack} aria-label="Voltar" size="small">
+                <ArrowBackIcon fontSize="small" />
+              </IconButton>
+              <Typography className="access-title">{roleTitle}</Typography>
               <Typography className="access-sub">
                 {role === 'administrador'
-                  ? 'Na primeira vez, este e-mail cria o seu banco de dados.'
-                  : 'Informe o e-mail que foi cadastrado para você.'}
+                  ? 'Na primeira vez, o e-mail do Google cria o seu banco.'
+                  : 'Use o mesmo e-mail cadastrado no convite.'}
               </Typography>
+              {error && <Alert severity="error" className="access-alert">{error}</Alert>}
+              {role === 'administrador' && (
+                <TextField
+                  fullWidth
+                  label="Seu nome (opcional)"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  className="access-field"
+                  sx={{ mb: 1.5 }}
+                />
+              )}
+              <Button
+                fullWidth
+                className="access-google-btn"
+                onClick={handleGoogle}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={22} /> : (<><GoogleIcon /> Entrar com Google</>)}
+              </Button>
+            </Box>
+          )}
 
+          {phase === 'auth' && authMethod === 'password' && (
+            <Box className="access-professor">
+              <IconButton className="access-back-btn" onClick={goBack} aria-label="Voltar" size="small">
+                <ArrowBackIcon fontSize="small" />
+              </IconButton>
+              <Typography className="access-title">{roleTitle}</Typography>
+              <Typography className="access-sub">
+                {passwordMode === 'signup'
+                  ? 'Crie uma senha para este e-mail (mín. 6 caracteres).'
+                  : 'Entre com e-mail e senha.'}
+              </Typography>
               {error && <Alert severity="error" className="access-alert">{error}</Alert>}
 
               {role === 'administrador' && (
@@ -247,15 +419,111 @@ export default function Login() {
                 sx={{ mb: 1.5 }}
                 autoFocus
               />
+              <TextField
+                fullWidth
+                label="Senha"
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError('') }}
+                className="access-field"
+                sx={{ mb: 1.5 }}
+              />
 
               <Button
                 fullWidth
                 className="access-google-btn"
-                onClick={handleContinue}
-                disabled={loading || !email.trim()}
+                onClick={handlePassword}
+                disabled={loading || !email.trim() || !password}
+                startIcon={!loading ? <LockOutlinedIcon /> : null}
               >
-                {loading ? <CircularProgress size={22} /> : (<><GoogleIcon /> Continuar com Google</>)}
+                {loading
+                  ? <CircularProgress size={22} />
+                  : (passwordMode === 'signup' ? 'Criar senha e entrar' : 'Entrar')}
               </Button>
+
+              <Divider sx={{ my: 1.5 }} />
+              <Button
+                fullWidth
+                size="small"
+                onClick={() => {
+                  setPasswordMode((m) => (m === 'signin' ? 'signup' : 'signin'))
+                  setError('')
+                }}
+              >
+                {passwordMode === 'signin' ? 'Primeira vez? Criar senha' : 'Já tenho senha? Entrar'}
+              </Button>
+            </Box>
+          )}
+
+          {phase === 'auth' && authMethod === 'phone' && (
+            <Box className="access-professor">
+              <IconButton className="access-back-btn" onClick={goBack} aria-label="Voltar" size="small">
+                <ArrowBackIcon fontSize="small" />
+              </IconButton>
+              <Typography className="access-title">Responsável</Typography>
+              <Typography className="access-sub">
+                Use o celular cadastrado no convite. Enviaremos um código por SMS.
+              </Typography>
+              {error && <Alert severity="error" className="access-alert">{error}</Alert>}
+
+              {!phoneConfirmation ? (
+                <>
+                  <TextField
+                    fullWidth
+                    label="Telefone com DDD"
+                    placeholder="(11) 99999-9999"
+                    value={phone}
+                    onChange={(e) => { setPhone(e.target.value); setError('') }}
+                    className="access-field"
+                    sx={{ mb: 1.5 }}
+                    autoFocus
+                  />
+                  <Button
+                    fullWidth
+                    className="access-google-btn"
+                    onClick={handleSendSms}
+                    disabled={loading || !phone.trim()}
+                    startIcon={!loading ? <PhoneIphoneIcon /> : null}
+                  >
+                    {loading ? <CircularProgress size={22} /> : 'Enviar SMS'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Alert severity="info" className="access-alert">
+                    Código enviado. Digite o SMS recebido.
+                  </Alert>
+                  <TextField
+                    fullWidth
+                    label="Código SMS"
+                    value={smsCode}
+                    onChange={(e) => { setSmsCode(e.target.value); setError('') }}
+                    className="access-field"
+                    sx={{ mb: 1.5 }}
+                    autoFocus
+                  />
+                  <Button
+                    fullWidth
+                    className="access-google-btn"
+                    onClick={handleConfirmSms}
+                    disabled={loading || !smsCode.trim()}
+                  >
+                    {loading ? <CircularProgress size={22} /> : 'Confirmar código'}
+                  </Button>
+                  <Button
+                    fullWidth
+                    size="small"
+                    sx={{ mt: 1 }}
+                    onClick={() => {
+                      setPhoneConfirmation(null)
+                      setSmsCode('')
+                      clearRecaptcha()
+                    }}
+                  >
+                    Reenviar / trocar número
+                  </Button>
+                </>
+              )}
             </Box>
           )}
         </Box>
@@ -272,7 +540,9 @@ export default function Login() {
         <DialogTitle className="invite-start-title">Convite encontrado</DialogTitle>
         <DialogContent>
           <Typography className="invite-start-text">
-            O e-mail <strong>{invite?.email}</strong> foi cadastrado pelo administrador
+            {invite?.email
+              ? <>O e-mail <strong>{invite.email}</strong> foi cadastrado pelo administrador</>
+              : <>Seu telefone foi cadastrado pelo administrador</>}
             {' '}<strong>{invite?.adminName || invite?.adminEmail}</strong>.
           </Typography>
           {invite?.unitName && (

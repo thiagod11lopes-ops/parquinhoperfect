@@ -116,6 +116,7 @@ export async function hydrateFromCloud() {
  */
 export async function migrateLocalToCloud(prefixes = [
   'parquinhoTenantIndex',
+  'parquinhoPhoneIndex',
   'parquinhoTenant:',
   'parquinhoPresence:',
   'parquinhoMaxChildren',

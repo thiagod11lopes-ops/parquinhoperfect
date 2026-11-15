@@ -1,9 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import {
   resolveEmailAccess,
+  resolvePhoneAccess,
   normalizeEmail,
   isValidEmail,
 } from './TenantContext'
+import {
+  firebaseConfirmPhoneCode,
+  firebaseSignInWithGoogle,
+  firebaseSignInWithPassword,
+  firebaseSignOut,
+  firebaseSignUpWithPassword,
+  firebaseStartPhoneSignIn,
+} from '../firebase/authMethods'
 
 const AuthContext = createContext()
 
@@ -68,6 +77,12 @@ function normalizeUser(raw) {
   return raw
 }
 
+function inviteErrorForRole(wanted) {
+  if (wanted === 'gerente') return 'E-mail não cadastrado por um administrador. Peça o convite.'
+  if (wanted === 'professor') return 'E-mail não cadastrado pelo gerente. Peça o convite.'
+  return 'Cadastro não encontrado. Peça ao professor ou gerente o convite.'
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -102,72 +117,30 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const buildUserFromAccess = (access) => ({
-    id: `user-${access.email}`,
-    email: access.email,
-    name: access.name,
+  const buildUserFromAccess = (access, authMeta = {}) => ({
+    id: authMeta.uid || `user-${access.email || access.phone || Date.now()}`,
+    email: access.email || authMeta.email || null,
+    name: authMeta.name || access.name,
     role: access.role,
     tenantId: access.tenantId,
     adminEmail: access.adminEmail,
     adminName: access.adminName,
     unitId: access.unitId || null,
     unitName: access.unitName || null,
-    authProvider: 'google',
-    photoURL: null,
+    authProvider: authMeta.provider || 'password',
+    photoURL: authMeta.photoURL || null,
+    phone: authMeta.phone || access.phone || null,
+    firebaseUid: authMeta.uid || null,
     childName: access.childName || null,
     childAge: access.childAge ?? null,
     childPlan: access.childPlan || null,
     childAllergies: access.childAllergies || null,
   })
 
-  /**
-   * Login por e-mail + papel escolhido.
-   * Admin cria banco na 1ª vez.
-   * Convidados com status pending retornam needsStart + dados do convite.
-   */
-  const loginWithEmail = async (role, { email, name } = {}) => {
-    await new Promise((r) => setTimeout(r, 500))
-    const mail = normalizeEmail(email)
-    if (!isValidEmail(mail)) {
-      return { success: false, error: 'Informe um e-mail válido.' }
-    }
-
-    const wanted = role === 'admin' ? 'administrador' : role
-
-    if (wanted === 'administrador') {
-      // create or open tenant — done by caller via TenantContext.createAdminTenant
-      // Auth only persists after tenant exists
-      const access = resolveEmailAccess(mail)
-      if (access?.kind === 'admin') {
-        // Sempre escolher unidade ao entrar
-        return persist(buildUserFromAccess({
-          ...access,
-          name: name || access.name,
-          unitId: null,
-          unitName: null,
-        }))
-      }
-      if (access && access.kind !== 'admin') {
-        return { success: false, error: 'Este e-mail já está cadastrado em outro papel.' }
-      }
-      return {
-        success: false,
-        needsAdminCreate: true,
-        email: mail,
-        name: String(name || '').trim() || mail.split('@')[0],
-      }
-    }
-
+  const resolveRoleAccess = (wanted, mail) => {
     const access = resolveEmailAccess(mail)
     if (!access) {
-      return {
-        success: false,
-        error: wanted === 'gerente'
-          ? 'E-mail não cadastrado por um administrador. Peça o convite.'
-          : wanted === 'professor'
-            ? 'E-mail não cadastrado pelo gerente. Peça o convite.'
-            : 'E-mail não cadastrado. Peça ao professor ou gerente o convite.',
-      }
+      return { success: false, error: inviteErrorForRole(wanted) }
     }
     if (access.kind === 'revoked') {
       return { success: false, error: 'Este convite foi revogado.' }
@@ -185,19 +158,158 @@ export function AuthProvider({ children }) {
       setPendingInvite(access)
       return { success: false, needsStart: true, invite: access }
     }
-
-    return persist(buildUserFromAccess(access))
+    return { success: true, access }
   }
 
-  const activateAndLogin = (activatedAccess) => {
+  /**
+   * Login legado / pós-Firebase por e-mail + papel.
+   * Admin cria banco na 1ª vez.
+   */
+  const loginWithEmail = async (role, { email, name, authMeta } = {}) => {
+    const mail = normalizeEmail(email)
+    if (!isValidEmail(mail)) {
+      return { success: false, error: 'Informe um e-mail válido.' }
+    }
+
+    const wanted = role === 'admin' ? 'administrador' : role
+
+    if (wanted === 'administrador') {
+      const access = resolveEmailAccess(mail)
+      if (access?.kind === 'admin') {
+        return persist(buildUserFromAccess({
+          ...access,
+          name: name || authMeta?.name || access.name,
+          unitId: null,
+          unitName: null,
+        }, authMeta || { provider: 'password', email: mail }))
+      }
+      if (access && access.kind !== 'admin') {
+        return { success: false, error: 'Este e-mail já está cadastrado em outro papel.' }
+      }
+      return {
+        success: false,
+        needsAdminCreate: true,
+        email: mail,
+        name: String(name || authMeta?.name || '').trim() || mail.split('@')[0],
+        authMeta: authMeta || null,
+      }
+    }
+
+    const resolved = resolveRoleAccess(wanted, mail)
+    if (!resolved.success) return resolved
+    return persist(buildUserFromAccess(resolved.access, authMeta || { provider: 'password', email: mail }))
+  }
+
+  const finishWithFirebaseIdentity = async (role, identity) => {
+    if (!identity?.success) {
+      return { success: false, error: identity?.error || 'Falha na autenticação.' }
+    }
+
+    if (identity.provider === 'phone') {
+      const wanted = role === 'admin' ? 'administrador' : role
+      if (wanted === 'administrador') {
+        return {
+          success: false,
+          error: 'Administrador deve entrar com Google ou e-mail e senha.',
+        }
+      }
+      if (wanted !== 'responsavel') {
+        return {
+          success: false,
+          error: 'Login por SMS está disponível para Responsáveis. Use Google ou e-mail e senha.',
+        }
+      }
+
+      const access = resolvePhoneAccess(identity.phone)
+      if (!access) {
+        return {
+          success: false,
+          error: 'Telefone não cadastrado. Peça ao professor/gerente para incluir seu celular no convite.',
+        }
+      }
+      if (access.kind === 'revoked') {
+        return { success: false, error: 'Este convite foi revogado.' }
+      }
+      if (access.role !== 'responsavel') {
+        return {
+          success: false,
+          error: `Este telefone está cadastrado como ${access.role}.`,
+        }
+      }
+      if (access.status === 'pending') {
+        setPendingInvite(access)
+        return { success: false, needsStart: true, invite: access }
+      }
+      return persist(buildUserFromAccess(access, identity))
+    }
+
+    return loginWithEmail(role, {
+      email: identity.email,
+      name: identity.name,
+      authMeta: identity,
+    })
+  }
+
+  const loginWithGoogle = async (role) => {
+    const identity = await firebaseSignInWithGoogle()
+    return finishWithFirebaseIdentity(role, identity)
+  }
+
+  const loginWithPassword = async (role, { email, password, name, mode = 'signin' } = {}) => {
+    const mail = normalizeEmail(email)
+    if (!isValidEmail(mail)) return { success: false, error: 'Informe um e-mail válido.' }
+    if (!password || String(password).length < 6) {
+      return { success: false, error: 'A senha precisa ter pelo menos 6 caracteres.' }
+    }
+
+    let identity
+    if (mode === 'signup') {
+      identity = await firebaseSignUpWithPassword(mail, password, name)
+      if (!identity.success && identity.code === 'auth/email-already-in-use') {
+        identity = await firebaseSignInWithPassword(mail, password)
+      }
+    } else {
+      identity = await firebaseSignInWithPassword(mail, password)
+      if (!identity.success && identity.code === 'auth/user-not-found') {
+        return {
+          success: false,
+          error: 'Conta ainda sem senha. Use “Criar senha” na primeira vez.',
+          needsSignup: true,
+        }
+      }
+    }
+
+    return finishWithFirebaseIdentity(role, {
+      ...identity,
+      name: name || identity.name,
+    })
+  }
+
+  const startPhoneLogin = async (role, phone) => {
+    const wanted = role === 'admin' ? 'administrador' : role
+    if (wanted !== 'responsavel') {
+      return {
+        success: false,
+        error: 'Login por SMS está disponível para Responsáveis.',
+      }
+    }
+    return firebaseStartPhoneSignIn(phone)
+  }
+
+  const confirmPhoneLogin = async (role, confirmation, code) => {
+    const identity = await firebaseConfirmPhoneCode(confirmation, code)
+    return finishWithFirebaseIdentity(role, identity)
+  }
+
+  const activateAndLogin = (activatedAccess, authMeta = {}) => {
     if (!activatedAccess || activatedAccess.kind !== 'member') {
       return { success: false, error: 'Convite inválido.' }
     }
-    return persist(buildUserFromAccess(activatedAccess))
+    return persist(buildUserFromAccess(activatedAccess, authMeta))
   }
 
-  const loginAdminAfterCreate = (tenant, email, name) => persist({
-    id: `user-${email}`,
+  const loginAdminAfterCreate = (tenant, email, name, authMeta = {}) => persist({
+    id: authMeta.uid || `user-${email}`,
     email: normalizeEmail(email),
     name: name || tenant.adminName,
     role: 'administrador',
@@ -206,11 +318,12 @@ export function AuthProvider({ children }) {
     adminName: tenant.adminName,
     unitId: null,
     unitName: null,
-    authProvider: 'google',
-    photoURL: null,
+    authProvider: authMeta.provider || 'password',
+    photoURL: authMeta.photoURL || null,
+    phone: authMeta.phone || null,
+    firebaseUid: authMeta.uid || null,
   })
 
-  /** Admin escolhe a unidade ativa antes de usar o sistema */
   const selectActiveUnit = (unitId, unitName) => {
     if (!user) return { success: false, error: 'Sessão inválida.' }
     const id = String(unitId || '').trim()
@@ -233,10 +346,11 @@ export function AuthProvider({ children }) {
     return { success: true }
   }
 
-  const logout = () => {
+  const logout = async () => {
     setUser(null)
     setPendingInvite(null)
     localStorage.removeItem('daycareUser')
+    await firebaseSignOut()
   }
 
   const canAccess = (path) => {
@@ -259,6 +373,10 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user,
       loginWithEmail,
+      loginWithGoogle,
+      loginWithPassword,
+      startPhoneLogin,
+      confirmPhoneLogin,
       loginAdminAfterCreate,
       activateAndLogin,
       selectActiveUnit,
