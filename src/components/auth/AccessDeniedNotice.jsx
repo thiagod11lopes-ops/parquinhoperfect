@@ -3,13 +3,6 @@ import { createPortal } from 'react-dom'
 import { Box, Button, Typography } from '@mui/material'
 import GppBadOutlinedIcon from '@mui/icons-material/GppBadOutlined'
 
-const ROLE_HINT = {
-  gerente: 'Peça ao administrador para cadastrar seu e-mail como gerente.',
-  professor: 'Peça ao gerente da unidade para cadastrar seu e-mail.',
-  responsavel: 'Peça ao professor ou gerente para cadastrar seu e-mail ou telefone.',
-  administrador: 'Use o e-mail correto do administrador deste banco.',
-}
-
 export function isUnauthorizedAccessMessage(message = '') {
   const text = String(message).toLowerCase()
   return (
@@ -43,7 +36,6 @@ export default function AccessDeniedNotice({
 
   if (!open) return null
 
-  const hint = ROLE_HINT[role] || 'Somente pessoas autorizadas na hierarquia do Parquinho podem entrar.'
   const host = document.getElementById('phone-app-root') || document.body
 
   return createPortal(
@@ -65,11 +57,8 @@ export default function AccessDeniedNotice({
         <Typography className="access-denied-title">
           Você ainda não está autorizado
         </Typography>
-        <Typography className="access-denied-message">
+        <Typography className="access-denied-message" sx={{ mb: 1.5 }}>
           {message || 'Este login não está liberado na pirâmide do sistema.'}
-        </Typography>
-        <Typography className="access-denied-hint">
-          {hint}
         </Typography>
 
         <Button
