@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  Alert, Box, Button, Chip, CircularProgress, Stack, Typography,
+  Box, Button, CircularProgress, Typography,
 } from '@mui/material'
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
-import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded'
+import BoltRoundedIcon from '@mui/icons-material/BoltRounded'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTenant } from '../../context/TenantContext'
@@ -16,12 +16,12 @@ import {
 import { confirmMercadoPagoReturn, startMercadoPagoCheckout } from '../../billing/mercadoPago'
 import '../../styles/global.scss'
 
-function statusLabel(status) {
-  if (status === 'active') return 'Assinatura ativa'
-  if (status === 'trialing') return 'Período de teste'
-  if (status === 'pending') return 'Pagamento pendente'
-  if (status === 'canceled') return 'Cancelada'
-  return 'Expirada'
+function statusMeta(status) {
+  if (status === 'active') return { label: 'Ativo', tone: 'ok' }
+  if (status === 'trialing') return { label: 'Teste', tone: 'trial' }
+  if (status === 'pending') return { label: 'Pendente', tone: 'warn' }
+  if (status === 'canceled') return { label: 'Cancelado', tone: 'bad' }
+  return { label: 'Expirado', tone: 'bad' }
 }
 
 export default function Planos() {
@@ -29,6 +29,7 @@ export default function Planos() {
   const { getTenant, activatePaidPlan, updateSubscription } = useTenant()
   const [params] = useSearchParams()
   const [loadingPlan, setLoadingPlan] = useState(null)
+  const [selectedPlanId, setSelectedPlanId] = useState(null)
   const [message, setMessage] = useState(null)
   const [confirming, setConfirming] = useState(false)
 
@@ -38,43 +39,50 @@ export default function Planos() {
     [tenant?.subscription],
   )
   const currentPlan = getPlanById(access.planId)
+  const status = statusMeta(access.status)
 
   useEffect(() => {
-    const status = params.get('status')
+    const preferred = BILLING_PLANS.find((p) => p.highlight)?.id
+      || access.planId
+      || BILLING_PLANS[0]?.id
+    setSelectedPlanId(preferred)
+  }, [access.planId])
+
+  useEffect(() => {
+    const payStatus = params.get('status')
     const planId = params.get('plan')
     const paymentId = params.get('payment_id') || params.get('collection_id')
-    if (!status || !tenantId) return undefined
+    if (!payStatus || !tenantId) return undefined
 
-    if (status === 'success' && planId) {
+    if (payStatus === 'success' && planId) {
       setConfirming(true)
       ;(async () => {
         const remote = await confirmMercadoPagoReturn({ tenantId, planId, paymentId })
         if (remote.success && remote.subscription) {
           updateSubscription(tenantId, remote.subscription)
-          setMessage({ ok: true, text: 'Pagamento confirmado. Seu plano foi ativado.' })
+          setMessage({ ok: true, text: 'Pagamento confirmado. Plano ativado.' })
         } else {
-          // Reforço local: se o MP redirecionou com success, libera 30 dias
-          // (webhook/Cloud Function continua sendo a fonte oficial).
           activatePaidPlan(tenantId, planId, { mpPaymentId: paymentId || null })
           setMessage({
             ok: true,
-            text: remote.error
-              ? 'Pagamento retornou com sucesso. Ativamos o plano neste dispositivo; a confirmação final virá do Mercado Pago.'
-              : 'Pagamento confirmado. Seu plano foi ativado.',
+            text: 'Retorno com sucesso. Plano ativado neste dispositivo.',
           })
         }
         setConfirming(false)
       })()
-    } else if (status === 'failure') {
-      setMessage({ ok: false, text: 'Pagamento não concluído. Você pode tentar novamente.' })
-    } else if (status === 'pending') {
+    } else if (payStatus === 'failure') {
+      setMessage({ ok: false, text: 'Pagamento não concluído. Tente de novo.' })
+    } else if (payStatus === 'pending') {
       updateSubscription(tenantId, { status: 'pending', planId: planId || access.planId })
-      setMessage({ ok: false, text: 'Pagamento pendente. Assim que o Mercado Pago confirmar, o plano será liberado.' })
+      setMessage({ ok: false, text: 'Pagamento pendente no Mercado Pago.' })
     }
     return undefined
   }, [params, tenantId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isAdmin) return <Navigate to="/dashboard" replace />
+
+  const selected = getPlanById(selectedPlanId) || BILLING_PLANS[0]
+  const isCurrentSelected = access.planId === selected?.id && access.ok
 
   const handleCheckout = async (planId) => {
     setMessage(null)
@@ -105,87 +113,114 @@ export default function Planos() {
     }
   }
 
+  const endsLabel = access.endsAt
+    ? new Date(access.endsAt).toLocaleDateString('pt-BR')
+    : '—'
+
   return (
-    <Box className="page-container planos-page">
-      <Box className="page-header">
-        <Box>
-          <Typography className="page-title">Planos e cobrança</Typography>
-          <Typography className="page-subtitle">
-            Somente o administrador paga. Gerentes, professores e responsáveis usam sem cobrança.
+    <Box className="planos-shell">
+      <Box className="planos-aurora" aria-hidden />
+      <Box className="planos-aurora planos-aurora--two" aria-hidden />
+
+      <Box className="planos-hero">
+        <Typography className="planos-kicker">Parquinho · Admin</Typography>
+        <Typography className="planos-title">Seu plano</Typography>
+        <Typography className="planos-lead">
+          Só o administrador paga. A equipe e os responsáveis usam sem cobrança.
+        </Typography>
+      </Box>
+
+      <Box className={`planos-status planos-status--${status.tone}`}>
+        <Box className="planos-status-dot" aria-hidden />
+        <Box className="planos-status-copy">
+          <Typography className="planos-status-label">{status.label}</Typography>
+          <Typography className="planos-status-detail">
+            {access.ok
+              ? `${currentPlan?.name || 'Plano'} · até ${endsLabel}`
+              : 'Escolha um plano para liberar o painel completo'}
           </Typography>
         </Box>
       </Box>
 
-      {confirming && (
-        <Alert severity="info" sx={{ mb: 2 }}>Confirmando pagamento no Mercado Pago…</Alert>
-      )}
-      {message && (
-        <Alert severity={message.ok ? 'success' : 'warning'} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
-          {message.text}
-        </Alert>
-      )}
-
-      <Box className="planos-status-card">
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-          <WorkspacePremiumIcon color="warning" />
-          <Typography fontWeight={800}>
-            Status: {statusLabel(access.status)}
+      {(confirming || message) && (
+        <Box className={`planos-toast ${message?.ok === false ? 'is-warn' : 'is-ok'}`}>
+          <Typography>
+            {confirming ? 'Confirmando pagamento…' : message?.text}
           </Typography>
-          <Chip
-            size="small"
-            color={access.ok ? 'success' : 'error'}
-            label={currentPlan?.name || access.planId}
-          />
-        </Stack>
-        <Typography variant="body2" color="text.secondary">
-          {access.ok
-            ? `Válido até ${access.endsAt ? new Date(access.endsAt).toLocaleString('pt-BR') : '—'}`
-            : 'Seu acesso administrativo está bloqueado para uso pleno até a renovação do plano.'}
-        </Typography>
-      </Box>
+          {message && !confirming && (
+            <button type="button" className="planos-toast-close" onClick={() => setMessage(null)}>
+              Fechar
+            </button>
+          )}
+        </Box>
+      )}
 
-      <Stack spacing={1.5} className="planos-grid">
-        {BILLING_PLANS.map((plan) => {
-          const isCurrent = access.planId === plan.id && access.ok
+      <Box className="planos-picker" role="listbox" aria-label="Planos disponíveis">
+        {BILLING_PLANS.map((plan, index) => {
+          const active = selectedPlanId === plan.id
+          const current = access.planId === plan.id && access.ok
           return (
-            <Box
+            <button
               key={plan.id}
-              className={`planos-card ${plan.highlight ? 'is-highlight' : ''} ${isCurrent ? 'is-current' : ''}`}
+              type="button"
+              role="option"
+              aria-selected={active}
+              className={[
+                'planos-option',
+                active ? 'is-active' : '',
+                plan.highlight ? 'is-featured' : '',
+                current ? 'is-current' : '',
+              ].filter(Boolean).join(' ')}
+              style={{ animationDelay: `${0.05 + index * 0.06}s` }}
+              onClick={() => setSelectedPlanId(plan.id)}
             >
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography className="planos-card-name">{plan.name}</Typography>
-                {plan.highlight && <Chip size="small" color="warning" label="Mais escolhido" />}
-              </Stack>
-              <Typography className="planos-card-price">
+              <Box className="planos-option-top">
+                <Typography className="planos-option-name">{plan.name}</Typography>
+                {plan.highlight && <span className="planos-option-badge">Popular</span>}
+                {current && <span className="planos-option-badge is-soft">Atual</span>}
+              </Box>
+              <Typography className="planos-option-price">
                 {formatPlanPrice(plan)}
                 <span>/mês</span>
               </Typography>
-              <Typography className="planos-card-desc">{plan.description}</Typography>
-              <Stack spacing={0.75} sx={{ my: 1.5 }}>
-                {plan.features.map((f) => (
-                  <Stack key={f} direction="row" spacing={0.75} alignItems="center">
-                    <CheckCircleOutlineIcon sx={{ fontSize: 18, color: 'success.main' }} />
-                    <Typography variant="body2">{f}</Typography>
-                  </Stack>
-                ))}
-              </Stack>
-              <Button
-                fullWidth
-                variant={plan.highlight ? 'contained' : 'outlined'}
-                className={plan.highlight ? 'btn-orange-card' : ''}
-                disabled={Boolean(loadingPlan) || isCurrent}
-                onClick={() => handleCheckout(plan.id)}
-              >
-                {loadingPlan === plan.id
-                  ? <CircularProgress size={22} color="inherit" />
-                  : isCurrent
-                    ? 'Plano atual'
-                    : 'Assinar com Mercado Pago'}
-              </Button>
-            </Box>
+            </button>
           )
         })}
-      </Stack>
+      </Box>
+
+      {selected && (
+        <Box className="planos-detail" key={selected.id}>
+          <Typography className="planos-detail-desc">{selected.description}</Typography>
+          <Box className="planos-features">
+            {selected.features.map((feature) => (
+              <Box key={feature} className="planos-feature">
+                <span className="planos-feature-icon" aria-hidden>
+                  <CheckRoundedIcon />
+                </span>
+                <Typography>{feature}</Typography>
+              </Box>
+            ))}
+          </Box>
+
+          <Button
+            fullWidth
+            disableElevation
+            className="planos-cta"
+            disabled={Boolean(loadingPlan) || isCurrentSelected}
+            onClick={() => handleCheckout(selected.id)}
+            startIcon={!loadingPlan && !isCurrentSelected ? <BoltRoundedIcon /> : null}
+          >
+            {loadingPlan === selected.id
+              ? <CircularProgress size={22} color="inherit" />
+              : isCurrentSelected
+                ? 'Este já é o seu plano'
+                : `Assinar ${selected.name}`}
+          </Button>
+          <Typography className="planos-cta-note">
+            Pagamento seguro via Mercado Pago
+          </Typography>
+        </Box>
+      )}
     </Box>
   )
 }
