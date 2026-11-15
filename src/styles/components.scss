@@ -473,6 +473,172 @@
     margin-bottom: 0.85rem;
     border-radius: 12px;
   }
+}
+
+.access-denied-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: end center;
+  padding: 1rem 1rem 1.35rem;
+  pointer-events: auto;
+}
+
+#phone-app-root {
+  position: relative;
+}
+
+.access-denied-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 120%, rgba(249, 115, 22, 0.28), transparent 42%),
+    rgba(15, 17, 21, 0.55);
+  backdrop-filter: blur(10px);
+  animation: accessDeniedFade 0.28s ease-out;
+}
+
+.access-denied-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 360px);
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 1.45rem 1.25rem 1.2rem;
+  color: #fff7ed;
+  background:
+    linear-gradient(165deg, rgba(28, 25, 23, 0.96) 0%, rgba(67, 20, 7, 0.94) 55%, rgba(124, 45, 18, 0.92) 100%);
+  border: 1px solid rgba(255, 237, 213, 0.18);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  animation: accessDeniedRise 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.access-denied-orb {
+  position: absolute;
+  top: -48px;
+  right: -36px;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.55), transparent 68%);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.access-denied-icon-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 1rem;
+  display: grid;
+  place-items: center;
+}
+
+.access-denied-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(253, 186, 116, 0.45);
+  animation: accessDeniedPulse 2.2s ease-out infinite;
+}
+
+.access-denied-ring--delay {
+  animation-delay: 0.7s;
+}
+
+.access-denied-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #fb923c, #ea580c);
+  box-shadow: 0 12px 28px rgba(234, 88, 12, 0.45);
+  color: #fff;
+
+  .MuiSvgIcon-root {
+    font-size: 1.7rem;
+  }
+}
+
+.access-denied-kicker {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(254, 215, 170, 0.78);
+}
+
+.access-denied-title {
+  margin-top: 0.35rem !important;
+  text-align: center;
+  font-size: 1.28rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em;
+  line-height: 1.2 !important;
+  color: #fff7ed !important;
+}
+
+.access-denied-message {
+  margin-top: 0.7rem !important;
+  text-align: center;
+  font-size: 0.9rem !important;
+  line-height: 1.45 !important;
+  color: rgba(255, 247, 237, 0.9) !important;
+}
+
+.access-denied-hint {
+  margin-top: 0.65rem !important;
+  margin-bottom: 1.15rem !important;
+  text-align: center;
+  font-size: 0.78rem !important;
+  line-height: 1.4 !important;
+  color: rgba(254, 215, 170, 0.72) !important;
+}
+
+.access-denied-cta {
+  height: 48px !important;
+  border-radius: 16px !important;
+  text-transform: none !important;
+  font-weight: 800 !important;
+  color: #7c2d12 !important;
+  background: linear-gradient(135deg, #ffedd5, #fdba74) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+}
+
+@keyframes accessDeniedFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes accessDeniedRise {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes accessDeniedPulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+/* reopen panel nested selectors that follow access-alert in original file */
+.access-panel {
 
   .access-field {
     margin-bottom: 1rem;

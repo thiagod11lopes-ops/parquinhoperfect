@@ -18,6 +18,7 @@ import { useTenant } from '../../context/TenantContext'
 import { useAppearance } from '../../context/AppearanceContext'
 import { useSampleData } from '../../context/SampleDataContext'
 import { clearRecaptcha } from '../../firebase/authMethods'
+import AccessDeniedNotice, { isUnauthorizedAccessMessage } from '../../components/auth/AccessDeniedNotice'
 import AdminOnboarding from '../Onboarding/AdminOnboarding'
 import logoSplash from '../../assets/logo-splash.webp'
 import '../../styles/global.scss'
@@ -71,9 +72,21 @@ export default function Login() {
   const [smsCode, setSmsCode] = useState('')
   const [phoneConfirmation, setPhoneConfirmation] = useState(null)
   const [error, setError] = useState('')
+  const [accessDenied, setAccessDenied] = useState(null)
   const [loading, setLoading] = useState(false)
   const [invite, setInvite] = useState(null)
   const [pendingAuthMeta, setPendingAuthMeta] = useState(null)
+
+  const showAuthError = (message) => {
+    const text = message || 'Não foi possível entrar.'
+    if (isUnauthorizedAccessMessage(text)) {
+      setError('')
+      setAccessDenied(text)
+      return
+    }
+    setAccessDenied(null)
+    setError(text)
+  }
 
   useEffect(() => {
     if (isAuthenticated && phase !== 'onboarding') logout()
@@ -93,6 +106,7 @@ export default function Login() {
 
   const goBack = () => {
     setError('')
+    setAccessDenied(null)
     setEmail('')
     setPassword('')
     setAdminName('')
@@ -118,6 +132,7 @@ export default function Login() {
 
   const openRole = (nextRole) => {
     setError('')
+    setAccessDenied(null)
     setEmail('')
     setPassword('')
     setAdminName('')
@@ -132,6 +147,7 @@ export default function Login() {
 
   const openMethod = (method) => {
     setError('')
+    setAccessDenied(null)
     setAuthMethod(method)
     setPhase('auth')
   }
@@ -162,18 +178,19 @@ export default function Login() {
       afterLogin(result.homeRoute)
       return
     }
-    setError(result.error || 'Não foi possível entrar.')
+    showAuthError(result.error || 'Não foi possível entrar.')
   }
 
   const handleGoogle = async () => {
     setError('')
+    setAccessDenied(null)
     setLoading(true)
     try {
       const result = await loginWithGoogle(role)
       setPendingAuthMeta(result.authMeta || null)
       handleAuthResult(result)
     } catch {
-      setError('Falha no login com Google.')
+      showAuthError('Falha no login com Google.')
     } finally {
       setLoading(false)
     }
@@ -181,6 +198,7 @@ export default function Login() {
 
   const handlePassword = async () => {
     setError('')
+    setAccessDenied(null)
     setLoading(true)
     try {
       const result = await loginWithPassword(role, {
@@ -196,7 +214,7 @@ export default function Login() {
       }
       handleAuthResult(result)
     } catch {
-      setError('Falha no login com e-mail e senha.')
+      showAuthError('Falha no login com e-mail e senha.')
     } finally {
       setLoading(false)
     }
@@ -204,16 +222,17 @@ export default function Login() {
 
   const handleSendSms = async () => {
     setError('')
+    setAccessDenied(null)
     setLoading(true)
     try {
       const result = await startPhoneLogin(role, phone)
       if (!result.success) {
-        setError(result.error || 'Não foi possível enviar o SMS.')
+        showAuthError(result.error || 'Não foi possível enviar o SMS.')
         return
       }
       setPhoneConfirmation(result.confirmation)
     } catch {
-      setError('Falha ao enviar SMS.')
+      showAuthError('Falha ao enviar SMS.')
     } finally {
       setLoading(false)
     }
@@ -221,12 +240,13 @@ export default function Login() {
 
   const handleConfirmSms = async () => {
     setError('')
+    setAccessDenied(null)
     setLoading(true)
     try {
       const result = await confirmPhoneLogin(role, phoneConfirmation, smsCode)
       handleAuthResult(result)
     } catch {
-      setError('Falha ao validar o código SMS.')
+      showAuthError('Falha ao validar o código SMS.')
     } finally {
       setLoading(false)
     }
@@ -532,6 +552,13 @@ export default function Login() {
           )}
         </Box>
       )}
+
+      <AccessDeniedNotice
+        open={Boolean(accessDenied)}
+        message={accessDenied}
+        role={role}
+        onClose={() => setAccessDenied(null)}
+      />
 
       <Dialog
         open={Boolean(invite)}
